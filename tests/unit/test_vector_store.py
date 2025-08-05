@@ -8,12 +8,12 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from embeddings.embedding_store import (
+from luki_memory.storage.vector_store import (
     EmbeddingStore,
     EmbeddingStoreError,
     create_embedding_store
 )
-from ingestion.elr_ingestion import ELRChunk
+from luki_memory.ingestion.chunker import ELRChunk
 
 
 class TestEmbeddingStore:
@@ -22,7 +22,7 @@ class TestEmbeddingStore:
     @pytest.fixture
     def mock_sentence_transformer(self):
         """Mock SentenceTransformer for testing."""
-        with patch('embeddings.embedding_store.SentenceTransformer') as mock_st:
+        with patch('luki_memory.storage.vector_store.SentenceTransformer') as mock_st:
             mock_model = Mock()
             mock_model.get_sentence_embedding_dimension.return_value = 384
             mock_model.encode.return_value = np.random.rand(384)
@@ -32,7 +32,7 @@ class TestEmbeddingStore:
     @pytest.fixture
     def mock_chroma_client(self):
         """Mock ChromaDB client for testing."""
-        with patch('embeddings.embedding_store.chromadb.PersistentClient') as mock_client:
+        with patch('luki_memory.storage.vector_store.chromadb.PersistentClient') as mock_client:
             mock_instance = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 0
@@ -82,13 +82,13 @@ class TestEmbeddingStore:
     
     def test_embedding_store_init_model_error(self, mock_chroma_client):
         """Test embedding store initialization with model loading error."""
-        with patch('embeddings.embedding_store.SentenceTransformer', side_effect=Exception("Model error")):
+        with patch('luki_memory.storage.vector_store.SentenceTransformer', side_effect=Exception("Model error")):
             with pytest.raises(EmbeddingStoreError, match="Failed to load embedding model"):
                 EmbeddingStore()
     
     def test_embedding_store_init_chroma_error(self, mock_sentence_transformer):
         """Test embedding store initialization with ChromaDB error."""
-        with patch('embeddings.embedding_store.chromadb.PersistentClient', side_effect=Exception("DB error")):
+        with patch('luki_memory.storage.vector_store.chromadb.PersistentClient', side_effect=Exception("DB error")):
             with pytest.raises(EmbeddingStoreError, match="Failed to initialize ChromaDB"):
                 EmbeddingStore()
     
@@ -341,7 +341,7 @@ class TestCreateEmbeddingStore:
     
     def test_create_embedding_store_default(self):
         """Test factory function with default parameters."""
-        with patch('embeddings.embedding_store.EmbeddingStore') as mock_store:
+        with patch('luki_memory.storage.vector_store.EmbeddingStore') as mock_store:
             create_embedding_store()
             
             mock_store.assert_called_once_with(
@@ -352,7 +352,7 @@ class TestCreateEmbeddingStore:
     
     def test_create_embedding_store_custom(self):
         """Test factory function with custom parameters."""
-        with patch('embeddings.embedding_store.EmbeddingStore') as mock_store:
+        with patch('luki_memory.storage.vector_store.EmbeddingStore') as mock_store:
             create_embedding_store(
                 model_name="custom-model",
                 persist_directory="./custom_db",

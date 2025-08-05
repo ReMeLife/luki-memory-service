@@ -1,12 +1,12 @@
 """
-ELR Ingestion Module
-Load raw ELR JSON → NLP parse → text chunks
+Orchestration Module
+Coordinate the ELR ingestion pipeline from JSON to processed chunks.
 
 Responsibilities:
-- Parse Electronic Life Record (ELR®) data from JSON format
-- Extract entities, sentiment, and metadata using spaCy
-- Chunk text for embedding storage
-- Handle consent tags and privacy flags
+- Load and parse ELR JSON files
+- Orchestrate chunking, embedding, and redaction
+- Handle different ELR data sections
+- Manage processing results and errors
 """
 
 import json
@@ -16,26 +16,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-import spacy
-from spacy.lang.en import English
+from .chunker import ELRChunk, TextChunker, create_chunker
+from .redact import TextRedactor, create_redactor
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ELRChunk:
-    """Represents a processed chunk of ELR data ready for embedding."""
-    
-    content: str
-    metadata: Dict[str, Union[str, int, float, List[str]]]
-    consent_level: str = "private"  # private, family, research
-    chunk_id: str = ""
-    source_file: str = ""
-    created_at: datetime = None
-    
-    def __post_init__(self):
-        if self.created_at is None:
-            self.created_at = datetime.now()
 
 
 @dataclass
@@ -53,24 +37,18 @@ class ELRIngestionError(Exception):
     pass
 
 
-class ELRProcessor:
-    """Main class for processing ELR data."""
+class ELRPipeline:
+    """Main orchestration class for ELR ingestion pipeline."""
     
     def __init__(self, spacy_model: str = "en_core_web_sm"):
         """
-        Initialize ELR processor.
+        Initialize ELR pipeline.
         
         Args:
             spacy_model: Name of spaCy model to use for NLP processing
         """
-        try:
-            self.nlp = spacy.load(spacy_model)
-        except OSError:
-            logger.warning(f"spaCy model {spacy_model} not found, using basic English")
-            self.nlp = English()
-        
-        self.chunk_size = 512  # Max tokens per chunk
-        self.overlap_size = 50  # Token overlap between chunks
+        self.chunker = create_chunker(spacy_model)
+        self.redactor = create_redactor(spacy_model)
     
     def load_elr_file(self, file_path: Union[str, Path]) -> Dict:
         """
@@ -94,104 +72,6 @@ class ELRProcessor:
             
         except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ELRIngestionError(f"Failed to load ELR file {file_path}: {e}")
-    
-    def extract_entities(self, text: str) -> Dict[str, List[str]]:
-        """
-        Extract named entities from text using spaCy.
-        
-        Args:
-            text: Input text to process
-            
-        Returns:
-            Dictionary of entity types and their values
-        """
-        doc = self.nlp(text)
-        entities = {}
-        
-        for ent in doc.ents:
-            if ent.label_ not in entities:
-                entities[ent.label_] = []
-            entities[ent.label_].append(ent.text)
-        
-        return entities
-    
-    def analyze_sentiment(self, text: str) -> Dict[str, float]:
-        """
-        Analyze sentiment of text (placeholder for sentiment analysis).
-        
-        Args:
-            text: Input text to analyze
-            
-        Returns:
-            Sentiment scores dictionary
-        """
-        # TODO: Implement proper sentiment analysis
-        # For MVP, return neutral sentiment
-        return {
-            "polarity": 0.0,
-            "subjectivity": 0.0,
-            "confidence": 0.5
-        }
-    
-    def chunk_text(self, text: str, metadata: Dict) -> List[ELRChunk]:
-        """
-        Split text into chunks suitable for embedding.
-        
-        Args:
-            text: Input text to chunk
-            metadata: Base metadata for chunks
-            
-        Returns:
-            List of ELR chunks
-        """
-        doc = self.nlp(text)
-        sentences = [sent.text for sent in doc.sents]
-        
-        chunks = []
-        current_chunk = ""
-        current_tokens = 0
-        
-        for sentence in sentences:
-            sentence_tokens = len(self.nlp(sentence))
-            
-            if current_tokens + sentence_tokens > self.chunk_size and current_chunk:
-                # Create chunk
-                chunk_metadata = metadata.copy()
-                chunk_metadata.update({
-                    "token_count": current_tokens,
-                    "entities": self.extract_entities(current_chunk),
-                    "sentiment": self.analyze_sentiment(current_chunk)
-                })
-                
-                chunks.append(ELRChunk(
-                    content=current_chunk.strip(),
-                    metadata=chunk_metadata,
-                    consent_level=metadata.get("consent_level", "private")
-                ))
-                
-                # Start new chunk with overlap
-                current_chunk = sentence
-                current_tokens = sentence_tokens
-            else:
-                current_chunk += " " + sentence if current_chunk else sentence
-                current_tokens += sentence_tokens
-        
-        # Add final chunk if any content remains
-        if current_chunk.strip():
-            chunk_metadata = metadata.copy()
-            chunk_metadata.update({
-                "token_count": current_tokens,
-                "entities": self.extract_entities(current_chunk),
-                "sentiment": self.analyze_sentiment(current_chunk)
-            })
-            
-            chunks.append(ELRChunk(
-                content=current_chunk.strip(),
-                metadata=chunk_metadata,
-                consent_level=metadata.get("consent_level", "private")
-            ))
-        
-        return chunks
     
     def process_elr_data(self, elr_data: Dict, source_file: str = "") -> ELRProcessingResult:
         """
@@ -264,9 +144,11 @@ class ELRProcessor:
                         "section": section_name,
                         "subsection": key,
                         "data_type": "text",
-                        "source_file": source_file
+                        "source_file": source_file,
+                        "entities": self.redactor.extract_entities(value),
+                        "sentiment": self.redactor.analyze_sentiment(value)
                     }
-                    chunks.extend(self.chunk_text(value, metadata))
+                    chunks.extend(self.chunker.chunk_text(value, metadata))
                     
         elif isinstance(section_data, list):
             for i, item in enumerate(section_data):
@@ -275,9 +157,11 @@ class ELRProcessor:
                         "section": section_name,
                         "item_index": i,
                         "data_type": "list_item",
-                        "source_file": source_file
+                        "source_file": source_file,
+                        "entities": self.redactor.extract_entities(item),
+                        "sentiment": self.redactor.analyze_sentiment(item)
                     }
-                    chunks.extend(self.chunk_text(item, metadata))
+                    chunks.extend(self.chunker.chunk_text(item, metadata))
                 elif isinstance(item, dict):
                     # Handle nested dictionaries in lists
                     for key, value in item.items():
@@ -287,9 +171,11 @@ class ELRProcessor:
                                 "item_index": i,
                                 "subsection": key,
                                 "data_type": "nested_text",
-                                "source_file": source_file
+                                "source_file": source_file,
+                                "entities": self.redactor.extract_entities(value),
+                                "sentiment": self.redactor.analyze_sentiment(value)
                             }
-                            chunks.extend(self.chunk_text(value, metadata))
+                            chunks.extend(self.chunker.chunk_text(value, metadata))
         
         return chunks
 
@@ -306,15 +192,19 @@ def process_elr_file(file_path: Union[str, Path],
     Returns:
         Processing result
     """
-    processor = ELRProcessor(spacy_model)
-    elr_data = processor.load_elr_file(file_path)
-    return processor.process_elr_data(elr_data, str(file_path))
+    pipeline = ELRPipeline(spacy_model)
+    elr_data = pipeline.load_elr_file(file_path)
+    return pipeline.process_elr_data(elr_data, str(file_path))
 
 
-if __name__ == "__main__":
-    # Example usage
-    logging.basicConfig(level=logging.INFO)
+def create_pipeline(spacy_model: str = "en_core_web_sm") -> ELRPipeline:
+    """
+    Factory function to create an ELR pipeline.
     
-    # This would be used like:
-    # result = process_elr_file("path/to/elr_data.json")
-    # print(f"Processed {result.total_processed} chunks in {result.processing_time:.2f}s")
+    Args:
+        spacy_model: spaCy model to use
+        
+    Returns:
+        Initialized ELRPipeline instance
+    """
+    return ELRPipeline(spacy_model)
