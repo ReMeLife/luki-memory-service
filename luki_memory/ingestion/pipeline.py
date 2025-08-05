@@ -22,14 +22,8 @@ from .redact import TextRedactor, create_redactor
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ELRProcessingResult:
-    """Result of ELR processing operation."""
-    
-    chunks: List[ELRChunk]
-    total_processed: int
-    errors: List[str]
-    processing_time: float
+# Import ELRProcessingResult from schemas instead of defining here
+from ..schemas.elr import ELRProcessingResult
 
 
 class ELRIngestionError(Exception):
@@ -113,10 +107,12 @@ class ELRPipeline:
             processing_time = (datetime.now() - start_time).total_seconds()
             
             return ELRProcessingResult(
-                chunks=all_chunks,
-                total_processed=total_processed,
+                success=len(errors) == 0,
+                processed_items=total_processed,
+                failed_items=len(errors),
+                chunks_created=len(all_chunks),
                 errors=errors,
-                processing_time=processing_time
+                processing_time_seconds=processing_time
             )
             
         except Exception as e:
@@ -178,6 +174,19 @@ class ELRPipeline:
                             chunks.extend(self.chunker.chunk_text(value, metadata))
         
         return chunks
+    
+    def process_file(self, file_path: Union[str, Path]) -> ELRProcessingResult:
+        """
+        Process a single ELR file from start to finish.
+        
+        Args:
+            file_path: Path to ELR JSON file
+            
+        Returns:
+            Processing result with chunks and metadata
+        """
+        elr_data = self.load_elr_file(file_path)
+        return self.process_elr_data(elr_data, str(file_path))
 
 
 def process_elr_file(file_path: Union[str, Path], 

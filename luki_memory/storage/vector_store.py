@@ -20,7 +20,7 @@ import numpy as np
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 
-from ..ingestion.elr_ingestion import ELRChunk
+from ..ingestion.chunker import ELRChunk
 
 logger = logging.getLogger(__name__)
 

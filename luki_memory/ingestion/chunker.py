@@ -10,9 +10,9 @@ Responsibilities:
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 
 import spacy
 from spacy.lang.en import English
@@ -29,7 +29,8 @@ class ELRChunk:
     consent_level: str = "private"  # private, family, research
     chunk_id: str = ""
     source_file: str = ""
-    created_at: datetime = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
     
     def __post_init__(self):
         if self.created_at is None:
