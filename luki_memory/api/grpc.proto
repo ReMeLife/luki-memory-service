@@ -1,0 +1,287 @@
+syntax = "proto3";
+
+package luki.memory;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// Memory Service gRPC definitions
+service MemoryService {
+  // ELR Ingestion
+  rpc IngestELRFile(IngestELRFileRequest) returns (ELRProcessingResponse);
+  rpc IngestELRData(IngestELRDataRequest) returns (ELRProcessingResponse);
+  
+  // Search Operations
+  rpc SearchMemories(SearchRequest) returns (SearchResponse);
+  rpc BatchSearch(BatchSearchRequest) returns (BatchSearchResponse);
+  
+  // Context Management
+  rpc BuildContext(BuildContextRequest) returns (BuildContextResponse);
+  rpc UpdateContext(UpdateContextRequest) returns (UpdateContextResponse);
+  
+  // User Preferences
+  rpc GetUserPreferences(GetUserPreferencesRequest) returns (UserPreferencesResponse);
+  rpc UpdateUserPreferences(UpdateUserPreferencesRequest) returns (UserPreferencesResponse);
+  
+  // Session Management
+  rpc CreateSession(CreateSessionRequest) returns (SessionResponse);
+  rpc GetSession(GetSessionRequest) returns (SessionResponse);
+  rpc UpdateSession(UpdateSessionRequest) returns (SessionResponse);
+  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse);
+  
+  // Health Check
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Common Types
+enum ConsentLevel {
+  CONSENT_PRIVATE = 0;
+  CONSENT_FAMILY = 1;
+  CONSENT_RESEARCH = 2;
+}
+
+enum SensitivityLevel {
+  SENSITIVITY_PUBLIC = 0;
+  SENSITIVITY_PERSONAL = 1;
+  SENSITIVITY_SENSITIVE = 2;
+  SENSITIVITY_CONFIDENTIAL = 3;
+}
+
+enum ELRContentType {
+  CONTENT_LIFE_STORY = 0;
+  CONTENT_MEMORY = 1;
+  CONTENT_PREFERENCE = 2;
+  CONTENT_FAMILY = 3;
+  CONTENT_INTEREST = 4;
+  CONTENT_HEALTH = 5;
+  CONTENT_GOAL = 6;
+  CONTENT_RELATIONSHIP = 7;
+}
+
+enum QueryType {
+  QUERY_SIMILARITY = 0;
+  QUERY_KEYWORD = 1;
+  QUERY_HYBRID = 2;
+  QUERY_FILTER = 3;
+  QUERY_AGGREGATE = 4;
+}
+
+// ELR Ingestion Messages
+message IngestELRFileRequest {
+  string file_path = 1;
+  string user_id = 2;
+}
+
+message IngestELRDataRequest {
+  google.protobuf.Struct elr_data = 1;
+  string source_file = 2;
+  string user_id = 3;
+}
+
+message ELRProcessingResponse {
+  bool success = 1;
+  int32 processed_items = 2;
+  int32 failed_items = 3;
+  int32 chunks_created = 4;
+  repeated string errors = 5;
+  repeated string warnings = 6;
+  double processing_time_seconds = 7;
+  repeated string created_item_ids = 8;
+  repeated string updated_item_ids = 9;
+  repeated string failed_item_ids = 10;
+}
+
+// Search Messages
+message SearchRequest {
+  string query_text = 1;
+  QueryType query_type = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+  double similarity_threshold = 5;
+  string user_id = 6;
+  repeated ConsentLevel consent_levels = 7;
+  repeated ELRContentType content_types = 8;
+  repeated SensitivityLevel sensitivity_levels = 9;
+  google.protobuf.Timestamp date_from = 10;
+  google.protobuf.Timestamp date_to = 11;
+  repeated string tags = 12;
+  repeated string entities = 13;
+  google.protobuf.Struct custom_filters = 14;
+  bool include_metadata = 15;
+  bool include_chunks = 16;
+  bool highlight_matches = 17;
+  string query_id = 18;
+  string requested_by = 19;
+}
+
+message SearchResult {
+  string item_id = 1;
+  string chunk_id = 2;
+  string content = 3;
+  string title = 4;
+  double relevance_score = 5;
+  int32 rank = 6;
+  ELRContentType content_type = 7;
+  ConsentLevel consent_level = 8;
+  SensitivityLevel sensitivity_level = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp event_date = 11;
+  google.protobuf.Struct metadata = 12;
+  string highlighted_content = 13;
+  repeated string matched_terms = 14;
+  int32 chunk_index = 15;
+  int32 total_chunks = 16;
+  string context_before = 17;
+  string context_after = 18;
+}
+
+message SearchResponse {
+  string query_id = 1;
+  string query_text = 2;
+  QueryType query_type = 3;
+  repeated SearchResult results = 4;
+  int32 total_results = 5;
+  int32 returned_results = 6;
+  int32 offset = 7;
+  int32 limit = 8;
+  bool has_more = 9;
+  double execution_time_ms = 10;
+  string processed_query = 11;
+  repeated string query_terms = 12;
+  google.protobuf.Struct aggregations = 13;
+  google.protobuf.Timestamp timestamp = 14;
+}
+
+message BatchSearchRequest {
+  repeated SearchRequest queries = 1;
+  bool parallel_execution = 2;
+  bool fail_on_error = 3;
+  google.protobuf.Struct shared_filters = 4;
+  int32 shared_limit = 5;
+  string batch_id = 6;
+  int32 timeout_seconds = 7;
+}
+
+message BatchSearchResponse {
+  string batch_id = 1;
+  int32 total_queries = 2;
+  int32 successful_queries = 3;
+  int32 failed_queries = 4;
+  repeated SearchResponseOrError responses = 5;
+  double total_execution_time_ms = 6;
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+message SearchResponseOrError {
+  oneof result {
+    SearchResponse response = 1;
+    string error = 2;
+  }
+}
+
+// Context Management Messages
+message BuildContextRequest {
+  string user_id = 1;
+  string session_id = 2;
+  string conversation_id = 3;
+  string query = 4;
+}
+
+message BuildContextResponse {
+  google.protobuf.Struct context = 1;
+  bool success = 2;
+  string error = 3;
+}
+
+message UpdateContextRequest {
+  string user_id = 1;
+  string session_id = 2;
+  string conversation_id = 3;
+  string user_message = 4;
+  string assistant_response = 5;
+  google.protobuf.Struct extracted_info = 6;
+}
+
+message UpdateContextResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// User Preferences Messages
+message GetUserPreferencesRequest {
+  string user_id = 1;
+}
+
+message UpdateUserPreferencesRequest {
+  string user_id = 1;
+  UserPreferences preferences = 2;
+}
+
+message UserPreferences {
+  string user_id = 1;
+  string consent_level = 2;
+  int32 data_retention_days = 3;
+  string language = 4;
+  string timezone = 5;
+  string theme = 6;
+  bool email_notifications = 7;
+  bool push_notifications = 8;
+  string ai_personality = 9;
+  string response_length = 10;
+  google.protobuf.Struct custom_settings = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message UserPreferencesResponse {
+  UserPreferences preferences = 1;
+  bool success = 2;
+  string error = 3;
+}
+
+// Session Management Messages
+message CreateSessionRequest {
+  string user_id = 1;
+  string session_id = 2;
+  int32 ttl_seconds = 3;
+}
+
+message GetSessionRequest {
+  string session_id = 1;
+}
+
+message UpdateSessionRequest {
+  string session_id = 1;
+  google.protobuf.Struct session_data = 2;
+}
+
+message DeleteSessionRequest {
+  string session_id = 1;
+}
+
+message SessionResponse {
+  string session_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp last_accessed = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  google.protobuf.Struct data = 6;
+  bool is_active = 7;
+  bool success = 8;
+  string error = 9;
+}
+
+message DeleteSessionResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// Health Check Messages
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string version = 3;
+  google.protobuf.Struct service_info = 4;
+}
