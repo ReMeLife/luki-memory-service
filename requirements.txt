@@ -1,0 +1,78 @@
+# LUKi Memory Service Dependencies
+# Core framework and web service
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Vector database and embeddings
+chromadb==0.4.18
+sentence-transformers==2.2.2
+faiss-cpu==1.7.4
+
+# NLP processing for ELR ingestion
+spacy==3.7.2
+transformers==4.36.0
+torch==2.1.1
+numpy==1.24.3
+nltk==3.8.1
+
+# Database and storage
+sqlalchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.9
+redis==5.0.1
+
+# HTTP client and async support
+httpx==0.25.2
+aiohttp==3.9.1
+asyncio-mqtt==0.16.1
+
+# Data processing and utilities
+pandas==2.1.4
+python-dateutil==2.8.2
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Logging and monitoring
+structlog==23.2.0
+prometheus-client==0.19.0
+
+# Testing and development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+httpx==0.25.2
+
+# Environment and configuration
+python-dotenv==1.0.0
+click==8.1.7
+
+# Text processing and chunking
+tiktoken==0.5.2
+langchain==0.0.350
+langchain-community==0.0.1
+
+# Privacy and security
+cryptography==41.0.8
+bcrypt==4.1.2
+
+# Data validation and serialization
+marshmallow==3.20.2
+jsonschema==4.20.0
+
+# Async database drivers
+asyncpg==0.29.0
+aioredis==2.0.1
+
+# Medical/healthcare specific (for ELR processing)
+dateparser==1.2.0
+fuzzywuzzy==0.18.0
+python-levenshtein==0.23.0
+
+# Development tools
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
