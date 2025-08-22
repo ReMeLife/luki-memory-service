@@ -10,7 +10,7 @@ Responsibilities:
 """
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import spacy
 from spacy.lang.en import English
@@ -77,7 +77,7 @@ class TextRedactor:
             "confidence": 0.5
         }
     
-    def redact_pii(self, text: str, entity_types: List[str] = None) -> str:
+    def redact_pii(self, text: str, entity_types: Optional[List[str]] = None) -> str:
         """
         Redact PII from text based on entity types.
         
@@ -106,6 +106,24 @@ class TextRedactor:
                 )
         
         return redacted_text
+    
+    def redact_sensitive_terms(self, text: str) -> str:
+        """
+        Apply additional redaction for highly sensitive content.
+        
+        Args:
+            text: Input text to redact
+            
+        Returns:
+            Text with sensitive terms redacted
+        """
+        # For confidential content, redact additional entity types
+        sensitive_entity_types = [
+            "PERSON", "ORG", "GPE", "DATE", "TIME", "MONEY", "PERCENT",
+            "CARDINAL", "ORDINAL", "QUANTITY", "PHONE", "EMAIL"
+        ]
+        
+        return self.redact_pii(text, sensitive_entity_types)
 
 
 def create_redactor(spacy_model: str = "en_core_web_sm") -> TextRedactor:

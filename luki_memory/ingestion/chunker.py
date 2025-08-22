@@ -17,6 +17,8 @@ from typing import Dict, List, Union, Optional
 import spacy
 from spacy.lang.en import English
 
+from ..schemas.elr import ConsentLevel, SensitivityLevel, ELRContentType
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,17 +26,51 @@ logger = logging.getLogger(__name__)
 class ELRChunk:
     """Represents a processed chunk of ELR data ready for embedding."""
     
-    content: str
-    metadata: Dict[str, Union[str, int, float, List[str]]]
-    consent_level: str = "private"  # private, family, research
-    chunk_id: str = ""
-    source_file: str = ""
+    # Core content
+    text: str
+    chunk_id: str
+    
+    # Chunk metadata
+    parent_item_id: str
+    chunk_index: int
+    total_chunks: int
+    
+    # Content boundaries
+    start_char: Optional[int] = None
+    end_char: Optional[int] = None
+    
+    # Inherited metadata
+    user_id: str = ""
+    content_type: ELRContentType = ELRContentType.MEMORY
+    consent_level: ConsentLevel = ConsentLevel.PRIVATE
+    sensitivity_level: SensitivityLevel = SensitivityLevel.PERSONAL
+    
+    # Processing info
     created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: Optional[datetime] = None
+    embedding_model: Optional[str] = None
+    
+    # Quality metrics
+    chunk_quality_score: Optional[float] = None
+    
+    # Source tracking
+    source_file: Optional[str] = None
+    
+    # Legacy support for existing code
+    metadata: Dict[str, Union[str, int, float, List[str]]] = field(default_factory=dict)
     
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.now()
+            self.created_at = datetime.utcnow()
+        
+        # Ensure chunk_id is set if empty
+        if not self.chunk_id:
+            import uuid
+            self.chunk_id = str(uuid.uuid4())
+    
+    @property
+    def content(self) -> str:
+        """Legacy property for backward compatibility."""
+        return self.text
 
 
 class TextChunker:
@@ -56,13 +92,15 @@ class TextChunker:
         self.chunk_size = 512  # Max tokens per chunk
         self.overlap_size = 50  # Token overlap between chunks
     
-    def chunk_text(self, text: str, metadata: Dict) -> List[ELRChunk]:
+    def chunk_text(self, text: str, metadata: Dict, parent_item_id: str = "", user_id: str = "") -> List[ELRChunk]:
         """
         Split text into chunks suitable for embedding.
         
         Args:
             text: Input text to chunk
             metadata: Base metadata for chunks
+            parent_item_id: ID of the parent ELR item
+            user_id: User ID for the chunks
             
         Returns:
             List of ELR chunks
@@ -73,6 +111,12 @@ class TextChunker:
         chunks = []
         current_chunk = ""
         current_tokens = 0
+        chunk_index = 0
+        
+        # Extract metadata values with defaults
+        consent_level = ConsentLevel(metadata.get("consent_level", "private"))
+        content_type = ELRContentType(metadata.get("content_type", "memory"))
+        sensitivity_level = SensitivityLevel(metadata.get("sensitivity_level", "personal"))
         
         for sentence in sentences:
             sentence_tokens = len(self.nlp(sentence))
@@ -85,11 +129,19 @@ class TextChunker:
                 })
                 
                 chunks.append(ELRChunk(
-                    content=current_chunk.strip(),
-                    metadata=chunk_metadata,
-                    consent_level=metadata.get("consent_level", "private")
+                    text=current_chunk.strip(),
+                    chunk_id="",  # Will be generated in __post_init__
+                    parent_item_id=parent_item_id,
+                    chunk_index=chunk_index,
+                    total_chunks=0,  # Will be updated after all chunks are created
+                    user_id=user_id,
+                    content_type=content_type,
+                    consent_level=consent_level,
+                    sensitivity_level=sensitivity_level,
+                    metadata=chunk_metadata
                 ))
                 
+                chunk_index += 1
                 # Start new chunk with overlap
                 current_chunk = sentence
                 current_tokens = sentence_tokens
@@ -105,10 +157,22 @@ class TextChunker:
             })
             
             chunks.append(ELRChunk(
-                content=current_chunk.strip(),
-                metadata=chunk_metadata,
-                consent_level=metadata.get("consent_level", "private")
+                text=current_chunk.strip(),
+                chunk_id="",  # Will be generated in __post_init__
+                parent_item_id=parent_item_id,
+                chunk_index=chunk_index,
+                total_chunks=0,  # Will be updated below
+                user_id=user_id,
+                content_type=content_type,
+                consent_level=consent_level,
+                sensitivity_level=sensitivity_level,
+                metadata=chunk_metadata
             ))
+        
+        # Update total_chunks for all chunks
+        total_chunks = len(chunks)
+        for chunk in chunks:
+            chunk.total_chunks = total_chunks
         
         return chunks
 
