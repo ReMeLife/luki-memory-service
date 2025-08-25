@@ -31,12 +31,15 @@ class EmbeddingIntegrationResult:
     errors: List[str] = field(default_factory=list)
     processing_time_seconds: Optional[float] = None
     chunk_ids: List[str] = field(default_factory=list)
+    created_item_ids: List[str] = field(default_factory=list)
     
     def __post_init__(self):
         if self.errors is None:
             self.errors = []
         if self.chunk_ids is None:
             self.chunk_ids = []
+        if self.created_item_ids is None:
+            self.created_item_ids = []
 
 
 class ELRToVectorPipeline:
@@ -106,7 +109,8 @@ class ELRToVectorPipeline:
                 return EmbeddingIntegrationResult(
                     success=False,
                     errors=errors,
-                    processing_time_seconds=(datetime.now() - start_time).total_seconds()
+                    processing_time_seconds=(datetime.now() - start_time).total_seconds(),
+                    created_item_ids=[]
                 )
             
             # Step 2: Convert ELR items to chunks with privacy controls
@@ -159,7 +163,8 @@ class ELRToVectorPipeline:
                 failed_embeddings=len(all_chunks) - len(chunk_ids),
                 errors=errors,
                 processing_time_seconds=processing_time,
-                chunk_ids=chunk_ids
+                chunk_ids=chunk_ids,
+                created_item_ids=[item.id or str(uuid.uuid4()) for item in elr_items]
             )
             
         except Exception as e:
@@ -170,7 +175,8 @@ class ELRToVectorPipeline:
             return EmbeddingIntegrationResult(
                 success=False,
                 errors=errors,
-                processing_time_seconds=(datetime.now() - start_time).total_seconds()
+                processing_time_seconds=(datetime.now() - start_time).total_seconds(),
+                created_item_ids=[]
             )
     
     def _extract_items_from_processing_result(
