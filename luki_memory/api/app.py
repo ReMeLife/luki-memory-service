@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 
 from .main import app
-from .endpoints import ingestion, search, users
+from .endpoints import auth, ingestion, search, users
 from .endpoints.ingestion import set_pipeline as set_ingestion_pipeline
 from .endpoints.search import set_pipeline as set_search_pipeline
 from .config import get_settings
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # Include routers
+app.include_router(auth.router)
 app.include_router(ingestion.router)
 app.include_router(search.router)
 app.include_router(users.router)
