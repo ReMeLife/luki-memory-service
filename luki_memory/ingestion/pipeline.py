@@ -95,7 +95,7 @@ class ELRPipeline:
             
             for section_name, section_data in sections:
                 try:
-                    chunks = self._process_section(section_name, section_data, source_file)
+                    chunks = self._process_section(section_name, section_data, source_file, elr_data)
                     all_chunks.extend(chunks)
                     total_processed += len(chunks)
                     
@@ -119,7 +119,7 @@ class ELRPipeline:
             raise ELRIngestionError(f"Failed to process ELR data: {e}")
     
     def _process_section(self, section_name: str, section_data: Union[Dict, List], 
-                        source_file: str) -> List[ELRChunk]:
+                        source_file: str, elr_data: Optional[Dict] = None) -> List[ELRChunk]:
         """
         Process a specific section of ELR data.
         
@@ -144,7 +144,10 @@ class ELRPipeline:
                         "entities": self.redactor.extract_entities(value),
                         "sentiment": self.redactor.analyze_sentiment(value)
                     }
-                    chunks.extend(self.chunker.chunk_text(value, metadata))
+                    # Extract user_id from ELR data or use default
+                    user_id = elr_data.get("user_id", "system") if elr_data else "system"
+                    parent_item_id = f"{user_id}_{section_name}_{key}"
+                    chunks.extend(self.chunker.chunk_text(value, metadata, parent_item_id, user_id))
                     
         elif isinstance(section_data, list):
             for i, item in enumerate(section_data):
@@ -157,7 +160,10 @@ class ELRPipeline:
                         "entities": self.redactor.extract_entities(item),
                         "sentiment": self.redactor.analyze_sentiment(item)
                     }
-                    chunks.extend(self.chunker.chunk_text(item, metadata))
+                    # Extract user_id from ELR data or use default
+                    user_id = elr_data.get("user_id", "system") if elr_data else "system"
+                    parent_item_id = f"{user_id}_{section_name}_{i}"
+                    chunks.extend(self.chunker.chunk_text(item, metadata, parent_item_id, user_id))
                 elif isinstance(item, dict):
                     # Handle nested dictionaries in lists
                     for key, value in item.items():
@@ -171,7 +177,10 @@ class ELRPipeline:
                                 "entities": self.redactor.extract_entities(value),
                                 "sentiment": self.redactor.analyze_sentiment(value)
                             }
-                            chunks.extend(self.chunker.chunk_text(value, metadata))
+                            # Extract user_id from ELR data or use default
+                            user_id = elr_data.get("user_id", "system") if elr_data else "system"
+                            parent_item_id = f"{user_id}_{section_name}_{i}_{key}"
+                            chunks.extend(self.chunker.chunk_text(value, metadata, parent_item_id, user_id))
         
         return chunks
     
