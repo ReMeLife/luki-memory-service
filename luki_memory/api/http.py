@@ -17,6 +17,10 @@ from ..schemas.elr import ELRItem, ELRChunk, ELRSearchFilter, ELRBatchOperation,
 from ..schemas.query import SearchQuery, SearchResponse, BatchSearchQuery, BatchSearchResponse
 from ..schemas.kv import UserPreferences, SessionData
 from ..ingestion.pipeline import ELRPipeline
+from ..ingestion.embedding_integration import (
+    ELRToVectorPipeline,
+    create_elr_to_vector_pipeline,
+)
 from ..storage.vector_store import EmbeddingStore
 from ..storage.kv_store import create_kv_store, UserPreferencesStore, SessionStore
 from ..storage.session_store import ShortTermMemoryStore, ContextBuilder
@@ -51,6 +55,7 @@ security = HTTPBearer()
 # Global dependencies (would be initialized properly in production)
 embedding_store: Optional[EmbeddingStore] = None
 elr_pipeline: Optional[ELRPipeline] = None
+elr_to_vector_pipeline: Optional[ELRToVectorPipeline] = None
 kv_store = None
 session_store: Optional[SessionStore] = None
 memory_store: Optional[ShortTermMemoryStore] = None
@@ -97,7 +102,7 @@ async def verify_consent(user_id: str, operation: str, resource_id: Optional[str
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup."""
-    global embedding_store, elr_pipeline, kv_store, session_store, memory_store, context_builder
+    global embedding_store, elr_pipeline, elr_to_vector_pipeline, kv_store, session_store, memory_store, context_builder
     global rbac_manager, consent_manager, audit_logger
     
     try:
@@ -110,6 +115,9 @@ async def startup_event():
         
         # Initialize pipeline
         elr_pipeline = ELRPipeline()
+        elr_to_vector_pipeline = create_elr_to_vector_pipeline()
+        # Share the same EmbeddingStore instance between API and pipeline
+        elr_to_vector_pipeline.embedding_store = embedding_store
         
         # Initialize auth and audit (placeholders for now)
         # rbac_manager = RBACManager()
@@ -143,10 +151,27 @@ async def ingest_elr_file(
     try:
         await verify_consent(user_id, "ingest_elr")
         
-        if not elr_pipeline:
-            raise HTTPException(status_code=500, detail="ELR pipeline not initialized")
+        if not elr_to_vector_pipeline or not embedding_store:
+            raise HTTPException(status_code=500, detail="Embedding pipeline not initialized")
         
-        result = elr_pipeline.process_file(file_path)
+        # Load ELR data then process to embeddings (stores chunks with user_id)
+        elr_data = elr_to_vector_pipeline.elr_pipeline.load_elr_file(file_path)
+        integration_result = elr_to_vector_pipeline.process_elr_to_embeddings(
+            elr_data=elr_data,
+            user_id=user_id,
+            source_file=file_path,
+        )
+        
+        # Map to ELRProcessingResult for response compatibility
+        result = ELRProcessingResult(
+            success=integration_result.success,
+            processed_items=integration_result.processed_items,
+            failed_items=integration_result.failed_embeddings,
+            chunks_created=integration_result.embedded_chunks,
+            errors=integration_result.errors,
+            processing_time_seconds=integration_result.processing_time_seconds,
+            created_item_ids=integration_result.created_item_ids,
+        )
         
         if audit_logger:
             await audit_logger.log_operation(
@@ -172,10 +197,25 @@ async def ingest_elr_data(
     try:
         await verify_consent(user_id, "ingest_elr")
         
-        if not elr_pipeline:
-            raise HTTPException(status_code=500, detail="ELR pipeline not initialized")
+        if not elr_to_vector_pipeline or not embedding_store:
+            raise HTTPException(status_code=500, detail="Embedding pipeline not initialized")
         
-        result = elr_pipeline.process_elr_data(elr_data, source_file)
+        integration_result = elr_to_vector_pipeline.process_elr_to_embeddings(
+            elr_data=elr_data,
+            user_id=user_id,
+            source_file=source_file,
+        )
+        
+        # Map to ELRProcessingResult for response compatibility
+        result = ELRProcessingResult(
+            success=integration_result.success,
+            processed_items=integration_result.processed_items,
+            failed_items=integration_result.failed_embeddings,
+            chunks_created=integration_result.embedded_chunks,
+            errors=integration_result.errors,
+            processing_time_seconds=integration_result.processing_time_seconds,
+            created_item_ids=integration_result.created_item_ids,
+        )
         
         if audit_logger:
             await audit_logger.log_operation(
@@ -211,20 +251,17 @@ async def search_memories(
             raise HTTPException(status_code=403, detail="Cannot search other users' data")
         
         # Perform search
+        metadata_filter = {"user_id": user_id}
+        if query.content_types:
+            metadata_filter.update({
+                "content_type": {"$in": [ct.value for ct in query.content_types]}
+            })
         results = embedding_store.search_similar(
             query=query.query_text,
             k=query.limit,
             similarity_threshold=query.similarity_threshold,
             consent_filter=[level.value for level in query.consent_levels] if query.consent_levels else None,
-            metadata_filter={
-                "user_id": user_id,
-                **({
-                    "content_types": ",".join([ct.value for ct in query.content_types]) 
-                } if query.content_types else {}),
-                **({
-                    "tags": ",".join(query.tags)
-                } if query.tags else {})
-            }
+            metadata_filter=metadata_filter
         )
         
         # Convert to SearchResponse format
@@ -237,7 +274,7 @@ async def search_memories(
             search_result = SearchResult(
                 item_id=result.get("id", ""),
                 chunk_id=metadata.get("chunk_id"),
-                content=result.get("document", ""),
+                content=result.get("content", ""),
                 title=metadata.get("title"),
                 relevance_score=1.0 - result.get("distance", 0.0),  # Convert distance to similarity
                 rank=i + 1,
