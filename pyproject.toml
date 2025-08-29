@@ -24,7 +24,6 @@ classifiers = [
 
 dependencies = [
     # Core dependencies
-    "python>=3.11",
     
     # Web framework
     "fastapi>=0.104.0",
