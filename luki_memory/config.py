@@ -98,7 +98,7 @@ def load_config() -> MemoryServiceConfig:
         ),
         chroma_collection_name=os.getenv(
             "CHROMA_COLLECTION_NAME", 
-            "luki_memories"
+            "elr_embeddings"
         ),
         postgres_url=os.getenv("POSTGRES_URL"),
         redis_url=os.getenv("REDIS_URL"),
