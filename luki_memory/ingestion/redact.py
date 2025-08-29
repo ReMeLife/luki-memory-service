@@ -38,6 +38,10 @@ class TextRedactor:
         except OSError:
             logger.warning(f"spaCy model {spacy_model} not found, using basic English")
             self.nlp = English()
+        
+        # Add sentencizer component if not present
+        if "sentencizer" not in self.nlp.pipe_names:
+            self.nlp.add_pipe("sentencizer")
     
     def extract_entities(self, text: str) -> Dict[str, List[str]]:
         """
