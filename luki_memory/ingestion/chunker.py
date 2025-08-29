@@ -85,9 +85,14 @@ class TextChunker:
         """
         try:
             self.nlp = spacy.load(spacy_model)
+            # Add sentencizer if not present
+            if 'sentencizer' not in self.nlp.pipe_names:
+                self.nlp.add_pipe('sentencizer')
         except OSError:
             logger.warning(f"spaCy model {spacy_model} not found, using basic English")
             self.nlp = English()
+            # Add sentencizer to basic English pipeline
+            self.nlp.add_pipe('sentencizer')
         
         self.chunk_size = 512  # Max tokens per chunk
         self.overlap_size = 50  # Token overlap between chunks
