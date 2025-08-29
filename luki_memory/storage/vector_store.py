@@ -142,9 +142,18 @@ class EmbeddingStore:
             
             # Prepare metadata for ChromaDB
             metadata = chunk.metadata.copy()
+            # Ensure required fields are present and canonicalized
+            metadata.setdefault("user_id", chunk.user_id or "")
             metadata.update({
-                "consent_level": chunk.consent_level,
-                "source_file": chunk.source_file,
+                "user_id": chunk.user_id or metadata.get("user_id", ""),
+                "consent_level": getattr(chunk.consent_level, "value", str(chunk.consent_level)) if chunk.consent_level else metadata.get("consent_level", "private"),
+                "content_type": getattr(chunk.content_type, "value", str(chunk.content_type)) if chunk.content_type else metadata.get("content_type", "memory"),
+                "sensitivity_level": getattr(chunk.sensitivity_level, "value", str(chunk.sensitivity_level)) if chunk.sensitivity_level else metadata.get("sensitivity_level", "personal"),
+                "chunk_index": chunk.chunk_index,
+                "total_chunks": chunk.total_chunks,
+                "parent_item_id": chunk.parent_item_id,
+                "chunk_id": chunk_id,
+                "source_file": chunk.source_file or metadata.get("source_file"),
                 "created_at": chunk.created_at.isoformat(),
                 "content_length": len(chunk.content)
             })
@@ -192,9 +201,18 @@ class EmbeddingStore:
             metadatas = []
             for chunk in chunks:
                 metadata = chunk.metadata.copy()
+                # Ensure required fields are present and canonicalized
+                metadata.setdefault("user_id", chunk.user_id or "")
                 metadata.update({
-                    "consent_level": chunk.consent_level,
-                    "source_file": chunk.source_file,
+                    "user_id": chunk.user_id or metadata.get("user_id", ""),
+                    "consent_level": getattr(chunk.consent_level, "value", str(chunk.consent_level)) if chunk.consent_level else metadata.get("consent_level", "private"),
+                    "content_type": getattr(chunk.content_type, "value", str(chunk.content_type)) if chunk.content_type else metadata.get("content_type", "memory"),
+                    "sensitivity_level": getattr(chunk.sensitivity_level, "value", str(chunk.sensitivity_level)) if chunk.sensitivity_level else metadata.get("sensitivity_level", "personal"),
+                    "chunk_index": chunk.chunk_index,
+                    "total_chunks": chunk.total_chunks,
+                    "parent_item_id": chunk.parent_item_id,
+                    "chunk_id": chunk.chunk_id,
+                    "source_file": chunk.source_file or metadata.get("source_file"),
                     "created_at": chunk.created_at.isoformat(),
                     "content_length": len(chunk.content)
                 })
@@ -265,7 +283,9 @@ class EmbeddingStore:
             if results["ids"] and results["ids"][0]:
                 for i, chunk_id in enumerate(results["ids"][0]):
                     distance = results["distances"][0][i]
-                    similarity = 1 - distance  # Convert distance to similarity
+                    # For cosine distance, convert to similarity: similarity = 1 - (distance / 2)
+                    # This handles cases where cosine distance > 1.0
+                    similarity = max(0.0, 1.0 - (distance / 2.0))
                     
                     if similarity >= similarity_threshold:
                         similar_chunks.append({
