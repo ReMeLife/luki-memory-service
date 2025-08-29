@@ -23,7 +23,7 @@ from .models import (
 )
 from .auth import get_current_user, User
 from .config import get_settings
-from .endpoints import auth, ingestion
+from .endpoints import auth, ingestion, search
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -67,8 +67,9 @@ async def startup_event():
             persist_directory=settings.vector_db_path,
             collection_name=settings.collection_name
         )
-        # Set pipeline in ingestion endpoints
+        # Set pipeline in ingestion and search endpoints
         ingestion.set_pipeline(pipeline)
+        search.set_pipeline(pipeline)
         logger.info("ELR pipeline initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize ELR pipeline: {e}")
@@ -93,6 +94,7 @@ async def health_check():
 # Include routers
 app.include_router(auth.router)
 app.include_router(ingestion.router)
+app.include_router(search.router)
 
 # Root endpoint
 @app.get("/")
@@ -107,10 +109,11 @@ async def root():
     }
 
 if __name__ == "__main__":
+    settings = get_settings()
     uvicorn.run(
         "luki_memory.api.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=settings.port,
         reload=True,
         log_level="info"
     )
