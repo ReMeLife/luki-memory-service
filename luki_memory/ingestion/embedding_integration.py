@@ -182,20 +182,135 @@ class ELRToVectorPipeline:
     def _extract_items_from_processing_result(
         self, elr_data: Dict, user_id: str, source_file: str
     ) -> List[ELRItem]:
-        """Extract ELR items from processing result (temporary implementation)."""
-        # This is a simplified version - in a full implementation, 
-        # we'd modify the pipeline to return the actual ELR items
+        """Extract ELR items from processing result."""
         items = []
         
-        # Process life story section
-        if "life_story" in elr_data:
-            items.extend(
-                self.elr_pipeline.process_life_story_section(
-                    elr_data["life_story"], user_id, source_file
-                )
-            )
+        # Process all sections of the ELR data structure
+        for section_name, section_data in elr_data.items():
+            if isinstance(section_data, dict):
+                # Handle nested dictionaries (like life_story, preferences)
+                for subsection_name, subsection_data in section_data.items():
+                    if isinstance(subsection_data, dict) and "content" in subsection_data:
+                        # Create item from content with metadata
+                        item_data = {
+                            "content_type": section_name,
+                            "content": subsection_data["content"],
+                            "metadata": {
+                                "section": section_name,
+                                "subsection": subsection_name,
+                                "consent_level": subsection_data.get("consent_level", "private"),
+                                "sensitivity": subsection_data.get("sensitivity", "personal")
+                            }
+                        }
+                        item = self._create_elr_item_from_record(item_data, user_id, source_file)
+                        if item:
+                            items.append(item)
+            elif isinstance(section_data, list):
+                # Handle lists (like memories, interests)
+                for i, list_item in enumerate(section_data):
+                    if isinstance(list_item, dict) and "content" in list_item:
+                        item_data = {
+                            "content_type": section_name,
+                            "content": list_item["content"],
+                            "metadata": {
+                                "section": section_name,
+                                "index": i,
+                                "title": list_item.get("title", ""),
+                                "consent_level": list_item.get("consent_level", "private"),
+                                "sensitivity": list_item.get("sensitivity", "personal")
+                            }
+                        }
+                        item = self._create_elr_item_from_record(item_data, user_id, source_file)
+                        if item:
+                            items.append(item)
         
         return items
+    
+    def _create_elr_item_from_record(self, record: Dict, user_id: str, source_file: str) -> Optional[ELRItem]:
+        """Create an ELR item from an individual record."""
+        try:
+            from ..schemas.elr import ELRItem, ELRMetadata, ELRContentType, ConsentLevel, SensitivityLevel
+            
+            # Map content type
+            content_type_map = {
+                "life_story": ELRContentType.LIFE_STORY,
+                "preference": ELRContentType.PREFERENCE,
+                "memory": ELRContentType.MEMORY,
+                "activity_log": ELRContentType.MEMORY,  # Map to MEMORY since ACTIVITY_LOG doesn't exist
+                "health_record": ELRContentType.HEALTH,  # Map to HEALTH since HEALTH_RECORD doesn't exist
+                "family": ELRContentType.FAMILY,
+                "interest": ELRContentType.INTEREST
+            }
+            
+            content_type = content_type_map.get(
+                record.get("content_type", "memory"), 
+                ELRContentType.MEMORY
+            )
+            
+            # Map consent level
+            consent_level_map = {
+                "full_sharing": ConsentLevel.RESEARCH,  # Map to RESEARCH since PUBLIC doesn't exist
+                "care_team_only": ConsentLevel.FAMILY,   # Map to FAMILY since RESTRICTED doesn't exist
+                "private": ConsentLevel.PRIVATE
+            }
+            
+            consent_level = consent_level_map.get(
+                record.get("consent_level", "private"),
+                ConsentLevel.PRIVATE
+            )
+            
+            # Map sensitivity level
+            sensitivity_level_map = {
+                "low": SensitivityLevel.PERSONAL,
+                "medium": SensitivityLevel.SENSITIVE,
+                "high": SensitivityLevel.CONFIDENTIAL
+            }
+            
+            sensitivity_level = sensitivity_level_map.get(
+                record.get("sensitivity_level", "low"),
+                SensitivityLevel.PERSONAL
+            )
+            
+            # Create metadata
+            metadata = ELRMetadata(
+                user_id=user_id,
+                source_file=source_file,
+                content_type=content_type,
+                consent_level=consent_level,
+                sensitivity_level=sensitivity_level,
+                chunk_index=None,
+                total_chunks=None,
+                language="en",
+                tags=record.get("metadata", {}).get("categories", []) or [record.get("content_type", "memory")],
+                entities=[],
+                confidence_score=None,
+                completeness_score=None,
+                version=1,
+                checksum=None
+            )
+            
+            # Create ELR item
+            item = ELRItem(
+                id=None,
+                external_id=None,
+                content=record.get("content", ""),
+                title=f"{record.get('content_type', 'Memory').title()}: {record.get('content', '')[:50]}...",
+                metadata=metadata,
+                parent_id=None,
+                related_ids=[],
+                event_date=None,
+                date_range_start=None,
+                date_range_end=None,
+                location=None,
+                coordinates=None,
+                custom_fields=record.get("metadata", {})
+            )
+            
+            return item
+            
+        except Exception as e:
+            logger.error(f"Error creating ELR item from record: {e}")
+            return None
     
     def _convert_item_to_chunks(
         self,
