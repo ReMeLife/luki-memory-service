@@ -32,7 +32,7 @@ def main():
     
     # Run the server
     uvicorn.run(
-        "luki_memory.api.main:app",
+        "luki_memory.api.app:app",  # Changed to use app.py which includes ALL routers
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
