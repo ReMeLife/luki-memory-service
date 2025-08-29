@@ -20,17 +20,17 @@ class Settings(BaseSettings):
     debug_mode: bool = Field(True, description="Enable debug endpoints")
     
     # Server Configuration
-    host: str = Field("127.0.0.1", description="Server host")
-    port: int = Field(8000, description="Server port")
-    workers: int = Field(1, description="Number of workers")
+    host: str = Field(default="127.0.0.1", description="Server host")
+    port: int = Field(default=8002, env="PORT", description="Server port")
+    workers: int = Field(default=1, description="Number of workers")
     
     # ELR Pipeline Configuration
     embedding_model: str = Field("all-MiniLM-L6-v2", description="Embedding model")
     spacy_model: str = Field("en_core_web_sm", description="SpaCy model")
     
     # Vector Database Configuration
-    vector_db_path: str = Field("./data/vector_db", description="Vector database path")
-    collection_name: str = Field("elr_memories", description="Collection name")
+    vector_db_path: str = Field("./data/chroma_db", description="Vector database path")
+    collection_name: str = Field("elr_embeddings", description="Collection name")
     
     # Authentication Configuration
     jwt_secret_key: str = Field("your-secret-key-change-in-production", description="JWT secret key")
