@@ -30,6 +30,92 @@ def set_pipeline(elr_pipeline):
     pipeline = elr_pipeline
 
 
+@router.post("/memories/test", response_model=MemorySearchResponse)
+async def search_memories_test(
+    request: MemorySearchRequest
+):
+    """
+    Test endpoint for memory search without authentication.
+    Used for integration testing.
+    """
+    if pipeline is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ELR pipeline not initialized"
+        )
+    
+    start_time = time.time()
+    
+    try:
+        # Perform semantic search
+        search_results = pipeline.search_user_memories(
+            user_id=request.user_id,
+            query=request.query,
+            k=min(request.k, settings.max_search_results)
+        )
+        
+        # Convert results to API format
+        formatted_results = []
+        for result in search_results:
+            # Apply content type filtering if specified
+            if request.content_types:
+                result_content_type = result.get('metadata', {}).get('content_type')
+                if result_content_type and result_content_type not in [ct.value for ct in request.content_types]:
+                    continue
+            
+            # Apply sensitivity filtering if specified
+            if request.sensitivity_filter:
+                result_sensitivity = result.get('metadata', {}).get('sensitivity_level')
+                if result_sensitivity and result_sensitivity not in [sl.value for sl in request.sensitivity_filter]:
+                    continue
+            
+            # Apply date filtering if specified
+            result_created_at = result.get('metadata', {}).get('created_at')
+            if result_created_at:
+                try:
+                    result_date = datetime.fromisoformat(result_created_at.replace('Z', '+00:00'))
+                    if request.date_from and result_date < request.date_from:
+                        continue
+                    if request.date_to and result_date > request.date_to:
+                        continue
+                except (ValueError, AttributeError):
+                    pass  # Skip date filtering if date parsing fails
+            
+            formatted_results.append(MemorySearchResult(
+                content=result.get('content', ''),
+                similarity_score=result.get('similarity_score', 0.0),
+                metadata=result.get('metadata', {}),
+                chunk_id=result.get('id', ''),
+                created_at=datetime.fromisoformat(result_created_at.replace('Z', '+00:00')) if result_created_at else datetime.utcnow()
+            ))
+        
+        query_time = time.time() - start_time
+        
+        logger.info(f"Test memory search completed for user {request.user_id}: "
+                   f"{len(formatted_results)} results in {query_time:.3f}s")
+        
+        return MemorySearchResponse(
+            success=True,
+            results=formatted_results,
+            total_results=len(formatted_results),
+            query_time_seconds=query_time,
+            user_id=request.user_id
+        )
+    
+    except Exception as e:
+        query_time = time.time() - start_time
+        error_msg = f"Test memory search failed: {str(e)}"
+        logger.error(error_msg)
+        
+        return MemorySearchResponse(
+            success=False,
+            results=[],
+            total_results=0,
+            query_time_seconds=query_time,
+            user_id=request.user_id
+        )
+
+
 @router.post("/memories", response_model=MemorySearchResponse)
 async def search_memories(
     request: MemorySearchRequest,
