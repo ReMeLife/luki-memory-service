@@ -77,22 +77,21 @@ class TextChunker:
     """Handles text chunking for embedding storage."""
     
     def __init__(self, spacy_model: str = "en_core_web_sm"):
-        """
-        Initialize text chunker.
+        """Initialize chunker with spaCy model."""
+        self.spacy_model = spacy_model
         
-        Args:
-            spacy_model: Name of spaCy model to use for sentence segmentation
-        """
         try:
             self.nlp = spacy.load(spacy_model)
-            # Add sentencizer if not present
-            if 'sentencizer' not in self.nlp.pipe_names:
-                self.nlp.add_pipe('sentencizer')
         except OSError:
-            logger.warning(f"spaCy model {spacy_model} not found, using basic English")
-            self.nlp = English()
-            # Add sentencizer to basic English pipeline
-            self.nlp.add_pipe('sentencizer')
+            try:
+                # Try the small model as fallback
+                self.nlp = spacy.load("en_core_web_sm")
+                logger.warning(f"spaCy model {spacy_model} not found, using en_core_web_sm")
+            except OSError:
+                logger.warning(f"spaCy model {spacy_model} not found, using basic English")
+                self.nlp = English()
+                # Add sentencizer to basic English pipeline
+                self.nlp.add_pipe('sentencizer')
         
         self.chunk_size = 512  # Max tokens per chunk
         self.overlap_size = 50  # Token overlap between chunks
