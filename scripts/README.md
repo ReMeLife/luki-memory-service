@@ -24,14 +24,16 @@ The memory service uses **two separate ingestion pipelines** to handle different
 
 ### Initial System Setup
 ```bash
-# Load project context (run once)
-python scripts/load_project_context.py
+# Note: Project context loading scripts have been removed from public repository
+# See "Privacy Notice" section below for details
+# Implement your own context loading based on the public API patterns
 ```
 
 ### User Data Processing
 ```bash
-# Process ELR data (run continuously or on-demand)
-python scripts/elr_data_ingestion.py
+# Note: ELR data ingestion scripts contain proprietary logic
+# See "Privacy Notice" section below for implementation guidance
+# Use the public ingestion pipeline classes as reference
 ```
 
 ## Key Benefits of Separation
@@ -47,10 +49,17 @@ python scripts/elr_data_ingestion.py
 - `project_context`: Static system knowledge, LUKi identity, technical documentation
 - `user_elr_data`: Personal user data with privacy controls and consent management
 
-## Legacy Scripts
+## Privacy Notice - Proprietary Scripts Removed
 
-- `load_project_knowledge.py`: Original script (deprecated due to architecture mixing)
-- `load_project_knowledge_fixed.py`: Temporary fix (deprecated)
-- `load_project_knowledge_working.py`: Working version (deprecated in favor of separated approach)
+Several scripts mentioned in this documentation have been removed from the public repository as they contain proprietary business logic and sensitive configuration data:
 
-Use the new separated scripts for all future development.
+- `load_project_knowledge.py`: Contains proprietary ReMeLife/LUKi domain knowledge
+- `load_project_knowledge_fixed.py`: Contains sensitive business logic and tokenomics
+- `load_project_knowledge_working.py`: Contains proprietary ecosystem details
+- `load_project_context.py`: References internal project documents
+- `elr_data_ingestion.py`: Contains proprietary ELR processing algorithms
+- `load_test_elr_data.py`: Contains internal test data and configurations
+
+These scripts have been sanitized from the repository to protect proprietary intellectual property while maintaining the core open-source memory service architecture.
+
+For implementation guidance on creating your own data ingestion scripts, refer to the public API documentation and the core ingestion pipeline classes in `luki_memory/ingestion/`.
