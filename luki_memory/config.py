@@ -15,7 +15,7 @@ class DatabaseConfig:
     """Database configuration settings."""
     
     # Vector store (ChromaDB)
-    chroma_persist_directory: str = "./data/chroma_db"
+    chroma_persist_directory: str = "./chroma_db"
     chroma_collection_name: str = "luki_memories"
     
     # Key-value store (PostgreSQL/Redis)
