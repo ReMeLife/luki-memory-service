@@ -1,18 +1,27 @@
 # luki-memory-service  
-*Unified memory layer for LUKi: ELR® ingestion, vector search, session/KV memory*  
-**PRIVATE / PROPRIETARY – Internal use only**
+*Open-source unified memory layer for AI agents: ELR ingestion, vector search, session/KV memory*
 
 ---
 
 ## 1. Overview  
-`luki-memory-service` provides the persistence and retrieval layer for the LUKi agent and modules. It unifies:
+`luki-memory-service` provides the persistence and retrieval layer for AI agents and applications. It unifies:
 
-- **Long‑term semantic memory** (vector DB of ELR® snippets, activity results, forum posts)  
+- **Long‑term semantic memory** (vector DB of ELR snippets, activity results, documents)  
 - **Structured/KV memory** (facts, preferences, flags, consents)  
 - **Ephemeral session memory** (short-term chat summaries)  
 - **Ingestion pipelines** (chunking, embedding, enrichment, redaction)
 
 It exposes a clean API (gRPC/HTTP) so any service (agent, reporting, engagement) can **store, search, and update** user memory safely.
+
+## Privacy & Proprietary Content Notice
+
+This repository contains the core open-source architecture for a memory service system. However, certain components contain proprietary business logic and have been sanitized for public release:
+
+- **ELR Domain Knowledge**: Specific Electronic Life Record schemas and processing logic contain proprietary healthcare and care domain expertise
+- **ChromaDB Collections**: Vector embeddings of proprietary knowledge bases and domain-specific content have been removed
+- **Business Logic**: Certain ingestion pipelines and knowledge processing contain proprietary algorithms for healthcare/care applications
+
+The core memory service architecture, API design, and general-purpose components remain fully functional and open-source.
 
 ---
 
@@ -169,18 +178,24 @@ print(g.json()["value"])
 
 ---
 
-## 10. Contributing (Internal Only)  
+## 10. Contributing  
 - Branch naming: `feat/memory-...`, `fix/ingest-...`  
-- Add unit tests for new storage adapters or consent logic.  
-- Never commit real ELR data; use `tests/fixtures/demo_elr.json`.  
-- PR requires 1 reviewer + green CI.
+- Add unit tests for new storage adapters or consent logic  
+- Never commit real user data; use synthetic test data only  
+- PR requires review and passing CI checks  
+- Follow privacy-by-design principles for all new features
 
 ---
 
 ## 11. License  
-**Proprietary – All Rights Reserved**  
-Copyright © 2025 Singularities Ltd / ReMeLife.  
-Unauthorized copying, modification, distribution, or disclosure is strictly prohibited.
+**MIT License**  
+Copyright © 2025 LUKi Memory Service Contributors  
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
