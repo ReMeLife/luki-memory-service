@@ -50,6 +50,7 @@ The core memory service architecture, API design, and general-purpose components
 luki_memory_service/
 ├── README.md
 ├── pyproject.toml
+├── requirements.txt
 ├── luki_memory/
 │   ├── __init__.py
 │   ├── config.py                    # env, DB urls, embedding model choice
@@ -58,17 +59,31 @@ luki_memory_service/
 │   │   ├── kv.py                    # key/value models
 │   │   └── query.py                 # search requests/responses
 │   ├── ingestion/
+│   │   ├── __init__.py
 │   │   ├── chunker.py               # text/media chunking
 │   │   ├── embedder.py              # embedding calls
+│   │   ├── embedding_integration.py # embedding pipeline integration
+│   │   ├── elr_ingestion.py         # ELR processing pipeline
 │   │   ├── pipeline.py              # orchestration
 │   │   └── redact.py                # PII/sensitive-field removal
 │   ├── storage/
 │   │   ├── vector_store.py          # Chroma/FAISS adapters
 │   │   ├── kv_store.py              # Postgres/Redis adapters
-│   │   └── session_store.py         # short-term memory
+│   │   ├── session_store.py         # short-term memory
+│   │   └── elr_store.py             # ELR-specific storage
 │   ├── api/
+│   │   ├── __init__.py
+│   │   ├── app.py                   # FastAPI application setup
+│   │   ├── config.py                # API configuration
 │   │   ├── http.py                  # FastAPI routes
-│   │   └── grpc.proto               # gRPC definitions (optional)
+│   │   ├── main.py                  # Main API entry point
+│   │   ├── models.py                # API data models
+│   │   ├── grpc.proto               # gRPC definitions (optional)
+│   │   └── endpoints/
+│   │       ├── __init__.py
+│   │       ├── ingestion.py         # Data ingestion endpoints
+│   │       ├── search.py            # Search endpoints
+│   │       └── users.py             # User management endpoints
 │   ├── auth/
 │   │   ├── rbac.py                  # role-based access checks
 │   │   └── consent.py               # consent enforcement
@@ -77,13 +92,17 @@ luki_memory_service/
 │   │   └── versions.py
 │   └── utils/
 │       └── ids.py                   # id generation, hashing, etc.
-├── migrations/                      # DB migrations (Alembic)
 ├── scripts/
-│   ├── run_dev.sh
-│   └── load_demo_data.py
+│   ├── README.md                    # Scripts documentation
+│   ├── run_dev.sh                   # Development server
+│   └── run_api_server.py            # API server runner
 └── tests/
-    ├── unit/
-    └── integration/
+    ├── api/                         # API integration tests
+    ├── unit/                        # Unit tests
+    └── validation/                  # Validation test documentation
+
+# Note: Several proprietary scripts and components have been removed
+# from this public release. See individual README files for details.
 ~~~
 
 ---
