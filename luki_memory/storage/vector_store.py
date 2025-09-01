@@ -68,9 +68,18 @@ class EmbeddingStore:
             # Create persist directory if it doesn't exist
             self.persist_directory.mkdir(parents=True, exist_ok=True)
             
+            # TEMPORARY: Use ephemeral client to bypass schema issues
             # Initialize ChromaDB client with persistence
-            self.chroma_client = chromadb.PersistentClient(
-                path=str(self.persist_directory),
+            # self.chroma_client = chromadb.PersistentClient(
+            #     path=str(self.persist_directory),
+            #     settings=Settings(
+            #         anonymized_telemetry=False,
+            #         allow_reset=True
+            #     )
+            # )
+            
+            # Use in-memory client temporarily
+            self.chroma_client = chromadb.EphemeralClient(
                 settings=Settings(
                     anonymized_telemetry=False,
                     allow_reset=True
@@ -138,25 +147,25 @@ class EmbeddingStore:
         
         try:
             # Generate embedding
-            embedding = self.generate_embedding(chunk.content)
+            embedding = self.generate_embedding(chunk.text)
             
             # Prepare metadata for ChromaDB
             metadata = chunk.metadata.copy()
-            # Ensure required fields are present and canonicalized
-            metadata.setdefault("user_id", chunk.user_id or "")
-            metadata.update({
-                "user_id": chunk.user_id or metadata.get("user_id", ""),
-                "consent_level": getattr(chunk.consent_level, "value", str(chunk.consent_level)) if chunk.consent_level else metadata.get("consent_level", "private"),
-                "content_type": getattr(chunk.content_type, "value", str(chunk.content_type)) if chunk.content_type else metadata.get("content_type", "memory"),
-                "sensitivity_level": getattr(chunk.sensitivity_level, "value", str(chunk.sensitivity_level)) if chunk.sensitivity_level else metadata.get("sensitivity_level", "personal"),
+            elr_metadata = {
+                "user_id": chunk.user_id,
+                "consent_level": str(chunk.consent_level),
+                "content_type": str(chunk.content_type),
+                "sensitivity_level": str(chunk.sensitivity_level),
                 "chunk_index": chunk.chunk_index,
                 "total_chunks": chunk.total_chunks,
                 "parent_item_id": chunk.parent_item_id,
                 "chunk_id": chunk_id,
-                "source_file": chunk.source_file or metadata.get("source_file"),
                 "created_at": chunk.created_at.isoformat(),
-                "content_length": len(chunk.content)
-            })
+                "source_file": chunk.source_file or "",
+                "chunk_quality_score": chunk.chunk_quality_score or 0.0,
+                "embedding_model": chunk.embedding_model or self.model_name
+            }
+            metadata.update(elr_metadata)
             
             # Convert any non-string metadata values to strings
             metadata = {k: str(v) if not isinstance(v, str) else v 
@@ -166,7 +175,7 @@ class EmbeddingStore:
             self.collection.add(
                 ids=[chunk_id],
                 embeddings=[embedding.tolist()],
-                documents=[chunk.content],
+                documents=[chunk.text],
                 metadatas=[metadata]
             )
             
@@ -194,7 +203,7 @@ class EmbeddingStore:
             chunk_ids = [chunk.chunk_id or str(uuid.uuid4()) for chunk in chunks]
             
             # Generate embeddings in batch
-            texts = [chunk.content for chunk in chunks]
+            texts = [chunk.text for chunk in chunks]
             embeddings = self.generate_embeddings_batch(texts)
             
             # Prepare metadata
@@ -203,7 +212,7 @@ class EmbeddingStore:
                 metadata = chunk.metadata.copy()
                 # Ensure required fields are present and canonicalized
                 metadata.setdefault("user_id", chunk.user_id or "")
-                metadata.update({
+                batch_metadata = {
                     "user_id": chunk.user_id or metadata.get("user_id", ""),
                     "consent_level": getattr(chunk.consent_level, "value", str(chunk.consent_level)) if chunk.consent_level else metadata.get("consent_level", "private"),
                     "content_type": getattr(chunk.content_type, "value", str(chunk.content_type)) if chunk.content_type else metadata.get("content_type", "memory"),
@@ -214,8 +223,9 @@ class EmbeddingStore:
                     "chunk_id": chunk.chunk_id,
                     "source_file": chunk.source_file or metadata.get("source_file"),
                     "created_at": chunk.created_at.isoformat(),
-                    "content_length": len(chunk.content)
-                })
+                    "content_length": len(chunk.text)
+                }
+                metadata.update(batch_metadata)
                 # Convert any non-string metadata values to strings
                 metadata = {k: str(v) if not isinstance(v, str) else v 
                            for k, v in metadata.items()}
@@ -280,9 +290,9 @@ class EmbeddingStore:
             # Process results and apply similarity threshold
             similar_chunks = []
             
-            if results["ids"] and results["ids"][0]:
+            if results and results.get("ids") and results["ids"] and results["ids"][0]:
                 for i, chunk_id in enumerate(results["ids"][0]):
-                    distance = results["distances"][0][i]
+                    distance = results["distances"][0][i] if results.get("distances") and results["distances"] and results["distances"][0] else 1.0
                     # For cosine distance, convert to similarity: similarity = 1 - (distance / 2)
                     # This handles cases where cosine distance > 1.0
                     similarity = max(0.0, 1.0 - (distance / 2.0))
@@ -290,8 +300,8 @@ class EmbeddingStore:
                     if similarity >= similarity_threshold:
                         similar_chunks.append({
                             "id": chunk_id,
-                            "content": results["documents"][0][i],
-                            "metadata": results["metadatas"][0][i],
+                            "content": results["documents"][0][i] if results.get("documents") and results["documents"] and results["documents"][0] else "",
+                            "metadata": results["metadatas"][0][i] if results.get("metadatas") and results["metadatas"] and results["metadatas"][0] else {},
                             "similarity": similarity,
                             "distance": distance
                         })
@@ -317,18 +327,14 @@ class EmbeddingStore:
             Chunk data or None if not found
         """
         try:
-            results = self.collection.get(
-                ids=[chunk_id],
-                include=["documents", "metadatas"]
-            )
+            results = self.collection.get(ids=[chunk_id], include=["documents", "metadatas"])
             
-            if results["ids"] and results["ids"][0]:
+            if results and results.get("ids") and results["ids"]:
                 return {
                     "id": chunk_id,
-                    "content": results["documents"][0],
-                    "metadata": results["metadatas"][0]
+                    "content": results["documents"][0] if results.get("documents") and results["documents"] else "",
+                    "metadata": results["metadatas"][0] if results.get("metadatas") and results["metadatas"] else {}
                 }
-            
             return None
             
         except Exception as e:
@@ -353,25 +359,19 @@ class EmbeddingStore:
             logger.error(f"Failed to delete chunk {chunk_id}: {e}")
             return False
     
+    def get_stats(self) -> Dict[str, Union[int, str]]:
+        """Get basic statistics about the vector store."""
+        count = self.collection.count() if self.collection else 0
+        name = self.collection.name if self.collection else "unknown"
+        return {
+            "total_chunks": count,
+            "collection_name": name,
+            "embedding_model": self.model_name
+        }
+    
     def get_collection_stats(self) -> Dict[str, Union[int, str]]:
-        """
-        Get statistics about the collection.
-        
-        Returns:
-            Dictionary with collection statistics
-        """
-        try:
-            count = self.collection.count()
-            return {
-                "total_chunks": count,
-                "collection_name": self.collection_name,
-                "model_name": self.model_name,
-                "embedding_dimension": self.embedding_dim,
-                "persist_directory": str(self.persist_directory)
-            }
-        except Exception as e:
-            logger.error(f"Failed to get collection stats: {e}")
-            return {}
+        """Get collection statistics - alias for get_stats for compatibility."""
+        return self.get_stats()
     
     def reset_collection(self) -> bool:
         """
