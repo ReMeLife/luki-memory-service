@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     
     # Server Configuration
     host: str = Field(default="127.0.0.1", description="Server host")
-    port: int = Field(default=8002, env="PORT", description="Server port")
+    port: int = Field(8002, description="Server port")
     workers: int = Field(default=1, description="Number of workers")
     
     # ELR Pipeline Configuration
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     spacy_model: str = Field("en_core_web_sm", description="SpaCy model")
     
     # Vector Database Configuration
-    vector_db_path: str = Field("./data/chroma_db", description="Vector database path")
+    vector_db_path: str = Field("./chroma_db", description="Vector database path")
     collection_name: str = Field("elr_embeddings", description="Collection name")
     
     # Authentication Configuration
