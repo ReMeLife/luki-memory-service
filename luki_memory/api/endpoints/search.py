@@ -16,18 +16,39 @@ from ..models import (
 from ..auth import get_current_active_user, User
 from ..config import get_settings
 from ...schemas.elr import ELRContentType, SensitivityLevel
+from ...storage.vector_store import create_embedding_store
+from ...cache.knowledge_cache import get_knowledge_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/search", tags=["search"])
 settings = get_settings()
 
+# Initialize knowledge cache
+knowledge_cache = get_knowledge_cache()
+
 # Global pipeline reference (will be injected)
 pipeline = None
+
+# Project knowledge store for system context
+project_knowledge_store = None
+
+# ELR store for user memories
+elr_store = None
 
 def set_pipeline(elr_pipeline):
     """Set the global pipeline instance."""
     global pipeline
     pipeline = elr_pipeline
+
+def set_project_knowledge_store(store):
+    """Set the global project knowledge store instance."""
+    global project_knowledge_store
+    project_knowledge_store = store
+
+def set_elr_store(store):
+    """Set the global ELR store instance."""
+    global elr_store
+    elr_store = store
 
 
 @router.post("/memories/test", response_model=MemorySearchResponse)
@@ -212,6 +233,70 @@ async def search_memories(
             total_results=0,
             query_time_seconds=query_time,
             user_id=request.user_id
+        )
+
+
+@router.post("/project-knowledge", response_model=MemorySearchResponse)
+async def search_project_knowledge(
+    request: MemorySearchRequest
+):
+    """
+    Search project knowledge and system context.
+    This searches the project_context collection containing loaded documentation.
+    """
+    if project_knowledge_store is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Project knowledge store not initialized"
+        )
+    
+    start_time = time.time()
+    
+    try:
+        # Search project knowledge store
+        search_results = project_knowledge_store.search_similar(
+            query=request.query,
+            k=min(request.k, settings.max_search_results),
+            similarity_threshold=0.2  # Use a reasonable default threshold
+        )
+        
+        # Convert results to API format
+        formatted_results = []
+        for result in search_results:
+            metadata = result.get('metadata', {})
+            
+            formatted_results.append(MemorySearchResult(
+                content=result.get('content', ''),
+                similarity_score=1.0 - result.get('distance', 0.0),  # Convert distance to similarity
+                metadata=metadata,
+                chunk_id=result.get('id', ''),
+                created_at=datetime.fromisoformat(metadata.get('created_at', datetime.utcnow().isoformat()))
+            ))
+        
+        query_time = time.time() - start_time
+        
+        logger.info(f"Project knowledge search completed: "
+                   f"{len(formatted_results)} results in {query_time:.3f}s")
+        
+        return MemorySearchResponse(
+            success=True,
+            results=formatted_results,
+            total_results=len(formatted_results),
+            query_time_seconds=query_time,
+            user_id="system"
+        )
+    
+    except Exception as e:
+        query_time = time.time() - start_time
+        error_msg = f"Project knowledge search failed: {str(e)}"
+        logger.error(error_msg)
+        
+        return MemorySearchResponse(
+            success=False,
+            results=[],
+            total_results=0,
+            query_time_seconds=query_time,
+            user_id="system"
         )
 
 
@@ -411,6 +496,7 @@ async def search_status(
         "service": "Memory Search",
         "status": "operational" if pipeline is not None else "unavailable",
         "pipeline_ready": pipeline is not None,
+        "project_knowledge_ready": project_knowledge_store is not None,
         "max_search_results": settings.max_search_results,
         "supported_filters": [
             "content_types",
@@ -421,6 +507,7 @@ async def search_status(
             "semantic_similarity",
             "metadata_filtering",
             "user_isolation",
-            "similar_memory_discovery"
+            "similar_memory_discovery",
+            "project_knowledge_search"
         ]
     }
