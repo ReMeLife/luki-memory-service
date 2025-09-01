@@ -31,7 +31,7 @@ app.include_router(users.router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize the ELR pipeline and inject into endpoints."""
+    """Initialize the ELR pipeline and project knowledge store."""
     logger.info("Initializing Memory Service API...")
     
     try:
@@ -47,7 +47,18 @@ async def startup_event():
         set_ingestion_pipeline(pipeline)
         set_search_pipeline(pipeline)
         
+        # Initialize project knowledge store
+        from ..storage.vector_store import create_embedding_store
+        from .endpoints.search import set_project_knowledge_store
+        project_store = create_embedding_store(
+            model_name=settings.embedding_model,
+            persist_directory=settings.vector_db_path,
+            collection_name="project_context"
+        )
+        set_project_knowledge_store(project_store)
+        
         logger.info("Memory Service API initialized successfully")
+        logger.info("Project knowledge store initialized successfully")
         logger.info(f"API available at: http://{settings.host}:{settings.port}")
         logger.info(f"Documentation at: http://{settings.host}:{settings.port}/docs")
         
