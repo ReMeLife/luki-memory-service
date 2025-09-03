@@ -150,7 +150,19 @@ async def search_memories(
     - Content type and sensitivity filtering
     - Date range filtering
     - User data isolation
+    - Anonymous user handling (returns empty results)
     """
+    # Handle anonymous users - return empty results
+    if request.user_id == 'anonymous_base_user':
+        logger.info(f"Anonymous user memory search - returning empty results")
+        return MemorySearchResponse(
+            success=True,
+            results=[],
+            total_results=0,
+            query_time_seconds=0.001,
+            user_id=request.user_id
+        )
+    
     if pipeline is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

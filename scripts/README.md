@@ -41,7 +41,7 @@ The memory service uses **two separate ingestion pipelines** to handle different
 1. **Scalability**: ELR processing can scale independently of system knowledge
 2. **Privacy**: User data gets proper privacy controls while system data doesn't need them
 3. **Performance**: System context loads once, user data processes continuously
-4. **Federated Learning**: ELR pipeline is designed for federated learning preparation
+4. **Federated Learning**: ELR pipeline provides foundation for future federated learning implementation
 5. **Maintenance**: System updates don't affect user data processing and vice versa
 
 ## Collections Structure
