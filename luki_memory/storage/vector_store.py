@@ -68,23 +68,23 @@ class EmbeddingStore:
             # Create persist directory if it doesn't exist
             self.persist_directory.mkdir(parents=True, exist_ok=True)
             
-            # TEMPORARY: Use ephemeral client to bypass schema issues
-            # Initialize ChromaDB client with persistence
-            # self.chroma_client = chromadb.PersistentClient(
-            #     path=str(self.persist_directory),
-            #     settings=Settings(
-            #         anonymized_telemetry=False,
-            #         allow_reset=True
-            #     )
-            # )
-            
-            # Use in-memory client temporarily
-            self.chroma_client = chromadb.EphemeralClient(
+            # Initialize ChromaDB client with persistence - FORCE persistence, no fallback
+            self.chroma_client = chromadb.PersistentClient(
+                path=str(self.persist_directory),
                 settings=Settings(
                     anonymized_telemetry=False,
-                    allow_reset=True
+                    allow_reset=True,
+                    persist_directory=str(self.persist_directory)
                 )
             )
+            logger.info(f"Using persistent ChromaDB at {self.persist_directory}")
+            
+            # Verify persistence is working by checking if directory contains data
+            db_files = list(self.persist_directory.glob("*"))
+            if db_files:
+                logger.info(f"Found existing ChromaDB files: {[f.name for f in db_files]}")
+            else:
+                logger.info("Initialized new persistent ChromaDB instance")
             
             # Get or create collection
             self.collection = self.chroma_client.get_or_create_collection(
