@@ -22,10 +22,12 @@ from .models import (
     MemorySearchRequest, MemorySearchResponse,
     UserMemoryStats, HealthResponse
 )
-from .auth import get_current_user, User
+from .auth import get_current_active_user
 from .config import get_settings
-from .endpoints import auth, ingestion, search
+from ..integrations.supabase_integration import create_supabase_integration
+from .endpoints import ingestion, search, supabase
 from pathlib import Path
+import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -313,9 +315,9 @@ async def health_check():
     )
 
 # Include routers
-app.include_router(auth.router)
 app.include_router(ingestion.router)
 app.include_router(search.router)
+app.include_router(supabase.router)
 
 # Debug endpoint for collection statistics
 @app.get("/debug/collections")
