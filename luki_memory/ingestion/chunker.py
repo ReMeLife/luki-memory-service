@@ -17,60 +17,13 @@ from typing import Dict, List, Union, Optional
 import spacy
 from spacy.lang.en import English
 
-from ..schemas.elr import ConsentLevel, SensitivityLevel, ELRContentType
+from ..schemas.elr import ConsentLevel, SensitivityLevel, ELRContentType, ELRChunk as SchemaELRChunk
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ELRChunk:
-    """Represents a processed chunk of ELR data ready for embedding."""
-    
-    # Core content
-    text: str
-    chunk_id: str
-    
-    # Chunk metadata
-    parent_item_id: str
-    chunk_index: int
-    total_chunks: int
-    
-    # Content boundaries
-    start_char: Optional[int] = None
-    end_char: Optional[int] = None
-    
-    # Inherited metadata
-    user_id: str = ""
-    content_type: ELRContentType = ELRContentType.MEMORY
-    consent_level: ConsentLevel = ConsentLevel.PRIVATE
-    sensitivity_level: SensitivityLevel = SensitivityLevel.PERSONAL
-    
-    # Processing info
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    embedding_model: Optional[str] = None
-    
-    # Quality metrics
-    chunk_quality_score: Optional[float] = None
-    
-    # Source tracking
-    source_file: Optional[str] = None
-    
-    # Legacy support for existing code
-    metadata: Dict[str, Union[str, int, float, List[str]]] = field(default_factory=dict)
-    
-    def __post_init__(self):
-        if self.created_at is None:
-            self.created_at = datetime.utcnow()
-        
-        # Ensure chunk_id is set if empty
-        if not self.chunk_id:
-            import uuid
-            self.chunk_id = str(uuid.uuid4())
-    
-    @property
-    def content(self) -> str:
-        """Legacy property for backward compatibility."""
-        return self.text
+# Use the schema ELRChunk as the canonical definition
+ELRChunk = SchemaELRChunk
 
 
 class TextChunker:
@@ -134,7 +87,7 @@ class TextChunker:
                 
                 chunks.append(ELRChunk(
                     text=current_chunk.strip(),
-                    chunk_id="",  # Will be generated in __post_init__
+                    chunk_id=f"{parent_item_id}_chunk_{chunk_index}",
                     parent_item_id=parent_item_id,
                     chunk_index=chunk_index,
                     total_chunks=0,  # Will be updated after all chunks are created
@@ -142,6 +95,11 @@ class TextChunker:
                     content_type=content_type,
                     consent_level=consent_level,
                     sensitivity_level=sensitivity_level,
+                    start_char=None,
+                    end_char=None,
+                    embedding_model=None,
+                    chunk_quality_score=None,
+                    source_file=metadata.get("source_file"),
                     metadata=chunk_metadata
                 ))
                 
@@ -155,23 +113,31 @@ class TextChunker:
         
         # Add final chunk if any content remains
         if current_chunk.strip():
+            chunk_text = current_chunk.strip()
             chunk_metadata = metadata.copy()
             chunk_metadata.update({
                 "token_count": current_tokens,
             })
             
-            chunks.append(ELRChunk(
-                text=current_chunk.strip(),
-                chunk_id="",  # Will be generated in __post_init__
+            chunk = ELRChunk(
+                text=chunk_text,
+                chunk_id=f"{parent_item_id}_chunk_{chunk_index}",
                 parent_item_id=parent_item_id,
                 chunk_index=chunk_index,
-                total_chunks=0,  # Will be updated below
+                total_chunks=len(chunks) + 1,  # Include this final chunk
                 user_id=user_id,
                 content_type=content_type,
                 consent_level=consent_level,
                 sensitivity_level=sensitivity_level,
+                start_char=None,
+                end_char=None,
+                embedding_model=None,
+                chunk_quality_score=None,
+                source_file=metadata.get("source_file"),
                 metadata=chunk_metadata
-            ))
+            )
+            
+            chunks.append(chunk)
         
         # Update total_chunks for all chunks
         total_chunks = len(chunks)
