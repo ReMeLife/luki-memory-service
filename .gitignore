@@ -223,7 +223,7 @@ logs/
 .ipynb_checkpoints/
 chroma_db/
 
-# Sensitive/proprietary files (restored from backup but not for git)
+# Sensitive/proprietary files 
 luki_memory/api/auth.py
 luki_memory/api/endpoints/auth.py
 luki_memory/cache/
@@ -243,3 +243,12 @@ env.example
 debug_*.py
 *validation_report.json
 test_phase_1b_integration.py
+test_chroma_db/
+test_persistence_validation.py
+test_db/
+test_vector_db/
+phase_1c_validation_report.json
+edge_case_validation_report.json
+comprehensive_validation_report.json
+simplified_validation_report.json
+supabase.py
