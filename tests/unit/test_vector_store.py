@@ -35,7 +35,19 @@ class TestEmbeddingStore:
         with patch('luki_memory.storage.vector_store.chromadb.PersistentClient') as mock_client:
             mock_instance = Mock()
             mock_collection = Mock()
+            
+            # Configure collection mock methods
             mock_collection.count.return_value = 0
+            mock_collection.add.return_value = None
+            mock_collection.query.return_value = {
+                'ids': [['test_id_1']],
+                'distances': [[0.1]],
+                'metadatas': [[{'user_id': 'test_user'}]],
+                'documents': [['test document']]
+            }
+            mock_collection.name = 'test_collection'
+            
+            # Configure client mock methods
             mock_instance.get_or_create_collection.return_value = mock_collection
             mock_client.return_value = mock_instance
             yield mock_instance, mock_collection
@@ -44,26 +56,28 @@ class TestEmbeddingStore:
     def embedding_store(self, mock_sentence_transformer, mock_chroma_client):
         """Create embedding store instance for testing."""
         client, collection = mock_chroma_client
-        store = EmbeddingStore(
-            model_name="test-model",
-            persist_directory="./test_db",
-            collection_name="test_collection"
-        )
-        store.collection = collection
-        return store
+        
+        with patch('luki_memory.storage.vector_store.chromadb.PersistentClient') as mock_persistent:
+            mock_persistent.return_value = client
+            store = EmbeddingStore(
+                model_name="test-model",
+                persist_directory="./test_db",
+                collection_name="test_collection"
+            )
+            store.collection = collection
+            store.embedding_model = mock_sentence_transformer
+            return store
     
     @pytest.fixture
     def sample_elr_chunk(self):
         """Sample ELR chunk for testing."""
         return ELRChunk(
-            content="I love gardening and spending time outdoors.",
-            metadata={
-                "section": "interests",
-                "data_type": "text"
-            },
-            consent_level="private",
-            chunk_id="test-chunk-1",
-            source_file="test.json"
+            text="I love gardening and spending time outdoors.",
+            chunk_id="test_chunk_1",
+            parent_item_id="test_item_1",
+            chunk_index=0,
+            total_chunks=1,
+            user_id="test_user_123"
         )
     
     def test_embedding_store_initialization(self, mock_sentence_transformer, mock_chroma_client):
@@ -136,23 +150,29 @@ class TestEmbeddingStore:
     
     def test_add_chunk(self, embedding_store, sample_elr_chunk):
         """Test adding single chunk to store."""
-        embedding_store.generate_embedding.return_value = np.random.rand(384)
-        
-        chunk_id = embedding_store.add_chunk(sample_elr_chunk)
-        
-        assert chunk_id == "test-chunk-1"
-        embedding_store.collection.add.assert_called_once()
+        # Mock the generate_embedding method properly
+        with patch.object(embedding_store, 'generate_embedding') as mock_gen_embedding:
+            mock_gen_embedding.return_value = np.random.rand(384)
+            
+            chunk_id = embedding_store.add_chunk(sample_elr_chunk)
+            
+            assert chunk_id == "test_chunk_1"
+            embedding_store.collection.add.assert_called_once()
         
         # Verify the call arguments
         call_args = embedding_store.collection.add.call_args
-        assert call_args[1]["ids"] == ["test-chunk-1"]
-        assert call_args[1]["documents"] == [sample_elr_chunk.content]
+        assert call_args[1]["ids"] == ["test_chunk_1"]
+        assert call_args[1]["documents"] == [sample_elr_chunk.text]
     
     def test_add_chunk_without_id(self, embedding_store):
         """Test adding chunk without predefined ID."""
         chunk = ELRChunk(
-            content="Test content",
-            metadata={"section": "test"}
+            text="Test content",
+            chunk_id="test_chunk_2",
+            parent_item_id="test_item_2",
+            chunk_index=0,
+            total_chunks=1,
+            user_id="test_user"
         )
         embedding_store.generate_embedding.return_value = np.random.rand(384)
         
@@ -172,8 +192,22 @@ class TestEmbeddingStore:
     def test_add_chunks_batch(self, embedding_store):
         """Test adding multiple chunks in batch."""
         chunks = [
-            ELRChunk(content="First chunk", metadata={"section": "test1"}),
-            ELRChunk(content="Second chunk", metadata={"section": "test2"})
+            ELRChunk(
+                text="First chunk",
+                chunk_id="chunk1",
+                parent_item_id="item1",
+                chunk_index=0,
+                total_chunks=2,
+                user_id="test_user"
+            ),
+            ELRChunk(
+                text="Second chunk",
+                chunk_id="chunk2",
+                parent_item_id="item1",
+                chunk_index=1,
+                total_chunks=2,
+                user_id="test_user"
+            )
         ]
         embedding_store.generate_embeddings_batch.return_value = np.random.rand(2, 384)
         
