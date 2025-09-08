@@ -24,14 +24,17 @@ class TestELRChunk:
     def test_elr_chunk_creation(self):
         """Test basic ELR chunk creation."""
         chunk = ELRChunk(
-            content="Test content",
-            metadata={"section": "test"},
-            consent_level="private"
+            text="Test content",
+            chunk_id="test_chunk_1",
+            parent_item_id="test_item_1",
+            chunk_index=0,
+            total_chunks=1,
+            user_id="test_user"
         )
         
-        assert chunk.content == "Test content"
-        assert chunk.metadata["section"] == "test"
-        assert chunk.consent_level == "private"
+        assert chunk.text == "Test content"
+        assert chunk.chunk_id == "test_chunk_1"
+        assert chunk.parent_item_id == "test_item_1"
         assert isinstance(chunk.created_at, datetime)
 
 
@@ -40,14 +43,31 @@ class TestELRPipeline:
     
     @pytest.fixture
     def pipeline(self):
-        """Create ELR pipeline instance for testing."""
-        with patch('luki_memory.ingestion.chunker.spacy.load') as mock_load:
-            with patch('luki_memory.ingestion.redact.spacy.load') as mock_redact_load:
-                mock_nlp = Mock()
-                mock_load.return_value = mock_nlp
-                mock_redact_load.return_value = mock_nlp
-                pipeline = ELRPipeline()
-                yield pipeline
+        """Create ELR pipeline for testing."""
+        with patch('luki_memory.ingestion.chunker.create_chunker') as mock_chunker_factory:
+            with patch('luki_memory.ingestion.redact.create_redactor') as mock_redactor_factory:
+                mock_chunker = Mock()
+                mock_redactor = Mock()
+                
+                # Configure chunker mock to return proper chunks
+                mock_chunker.chunk_text.return_value = [ELRChunk(
+                    text="test content",
+                    chunk_id="test_chunk_1", 
+                    parent_item_id="test_item_1",
+                    chunk_index=0,
+                    total_chunks=1,
+                    user_id="test_user"
+                )]
+                
+                # Configure redactor mock to return proper data structures
+                mock_redactor.extract_entities.return_value = {}
+                mock_redactor.analyze_sentiment.return_value = {"polarity": 0.0}
+                
+                mock_chunker_factory.return_value = mock_chunker
+                mock_redactor_factory.return_value = mock_redactor
+                
+                pipeline = ELRPipeline("en_core_web_sm")
+                return pipeline
     
     @pytest.fixture
     def sample_elr_data(self):
@@ -94,16 +114,23 @@ class TestELRPipeline:
         with patch.object(pipeline.chunker, 'chunk_text') as mock_chunk:
             with patch.object(pipeline.redactor, 'extract_entities') as mock_entities:
                 with patch.object(pipeline.redactor, 'analyze_sentiment') as mock_sentiment:
-                    mock_chunk.return_value = [ELRChunk("test content", {"section": "test"})]
+                    mock_chunk.return_value = [ELRChunk(
+                        text="test content",
+                        chunk_id="test_chunk_1",
+                        parent_item_id="test_item_1",
+                        chunk_index=0,
+                        total_chunks=1,
+                        user_id="test_user"
+                    )]
                     mock_entities.return_value = {}
                     mock_sentiment.return_value = {"polarity": 0.0}
                     
                     result = pipeline.process_elr_data(sample_elr_data, "test_file.json")
                     
                     assert isinstance(result, ELRProcessingResult)
-                    assert result.total_processed > 0
-                    assert len(result.chunks) > 0
-                    assert isinstance(result.processing_time, float)
+                    assert result.processed_items > 0
+                    assert result.chunks_created > 0
+                    assert isinstance(result.processing_time_seconds, float)
 
 
 class TestProcessELRFile:
@@ -124,14 +151,15 @@ class TestProcessELRFile:
         
         with patch('luki_memory.ingestion.pipeline.ELRPipeline') as mock_pipeline_class:
             mock_pipeline = Mock()
-            mock_result = ELRProcessingResult(
-                chunks=[],
-                total_processed=0,
+            result = ELRProcessingResult(
+                success=True,
+                processed_items=1,
+                chunks_created=1,
                 errors=[],
-                processing_time=0.1
+                processing_time_seconds=0.5
             )
             mock_pipeline.load_elr_file.return_value = test_data
-            mock_pipeline.process_elr_data.return_value = mock_result
+            mock_pipeline.process_elr_data.return_value = result
             mock_pipeline_class.return_value = mock_pipeline
             
             result = process_elr_file(test_file)
