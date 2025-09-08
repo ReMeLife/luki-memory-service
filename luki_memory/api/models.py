@@ -3,7 +3,7 @@
 Pydantic models for the Memory Service API
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from enum import Enum
@@ -37,7 +37,8 @@ class ELRIngestionRequest(BaseModel):
         description="Sensitivity level of the data"
     )
     
-    @validator('elr_data')
+    @field_validator('elr_data')
+    @classmethod
     def validate_elr_data(cls, v):
         """Validate ELR data structure."""
         if not isinstance(v, dict):
@@ -154,8 +155,8 @@ class BatchIngestionRequest(BaseModel):
     
     batch_data: List[ELRIngestionRequest] = Field(
         ...,
-        min_items=1,
-        max_items=100,
+        min_length=1,
+        max_length=100,
         description="Batch of ELR ingestion requests"
     )
     batch_id: Optional[str] = Field(
