@@ -111,6 +111,7 @@ class ELRPipeline:
                 processed_items=total_processed,
                 failed_items=len(errors),
                 chunks_created=len(all_chunks),
+                chunks=all_chunks,
                 errors=errors,
                 processing_time_seconds=processing_time
             )
