@@ -5,8 +5,9 @@ Defines data models for ELR items, consent levels, sensitivity enums, and metada
 """
 
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
+from enum import Enum
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field, validator
 
@@ -148,6 +149,12 @@ class ELRChunk(BaseModel):
     # Quality metrics
     chunk_quality_score: Optional[float] = Field(None, ge=0.0, le=1.0)
     
+    # Source tracking
+    source_file: Optional[str] = Field(None, description="Source file path")
+    
+    # Legacy support for existing code
+    metadata: Dict[str, Union[str, int, float, List[str]]] = Field(default_factory=dict, description="Additional metadata")
+    
     @validator('end_char')
     def end_char_greater_than_start(cls, v, values):
         if v is not None and 'start_char' in values and values['start_char'] is not None:
@@ -219,6 +226,7 @@ class ELRProcessingResult:
     processed_items: int = 0
     failed_items: int = 0
     chunks_created: int = 0
+    chunks: List['ELRChunk'] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     processing_time_seconds: Optional[float] = None
