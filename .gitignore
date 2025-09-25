@@ -224,11 +224,14 @@ logs/
 chroma_db/
 
 # Sensitive/proprietary files 
-luki_memory/api/auth.py
-luki_memory/api/endpoints/auth.py
 luki_memory/cache/
-luki_memory/ingestion/synthetic_elr_generator.py
-luki_memory/storage/knowledge_store.py
+# luki_memory/storage/knowledge_store.py  # Commented out for Railway deployment
+luki_memory/api/fallback_knowledge.py
+luki_memory/api/main_fixed.py
+luki_memory/api/app.py
+luki_memory/integrations/supabase_integration.py
+luki_memory/api/endpoints/supabase.py
+_context/
 scripts/elr_data_ingestion.py
 scripts/load_demo_data.py
 scripts/load_project_knowledge.py
@@ -251,4 +254,3 @@ phase_1c_validation_report.json
 edge_case_validation_report.json
 comprehensive_validation_report.json
 simplified_validation_report.json
-supabase.py
