@@ -47,62 +47,86 @@ The core memory service architecture, API design, and general-purpose components
 
 ## 4. Repository Structure  
 ~~~text
-luki_memory_service/
+luki-memory-service/
 ├── README.md
 ├── pyproject.toml
 ├── requirements.txt
+├── requirements-railway.txt         # railway deployment dependencies
+├── runtime.txt                      # python version specification
+├── .env                            # environment variables (gitignored)
+├── env.example                     # environment template
+├── .railwayignore                  # railway deployment exclusions
+├── .dockerignore                   # docker build exclusions
+├── Dockerfile                      # container build configuration
+├── railway.toml                    # railway deployment configuration
+├── railway.json                    # railway service configuration
+├── nixpacks.toml                   # nixpacks build configuration
+├── Procfile                        # process definitions
+├── MANIFEST.in                     # package manifest
+├── download_models.py              # model download utility
+├── data/                           # data storage directory
+├── chroma_db/                      # ChromaDB vector store
 ├── luki_memory/
 │   ├── __init__.py
-│   ├── config.py                    # env, DB urls, embedding model choice
+│   ├── config.py                   # env, DB urls, embedding model choice
 │   ├── schemas/
-│   │   ├── elr.py                   # ELR item, consent, sensitivity enums
-│   │   ├── kv.py                    # key/value models
-│   │   └── query.py                 # search requests/responses
+│   │   ├── __init__.py
+│   │   ├── elr.py                  # ELR item, consent, sensitivity enums
+│   │   └── query.py                # search requests/responses
 │   ├── ingestion/
 │   │   ├── __init__.py
-│   │   ├── chunker.py               # text/media chunking
-│   │   ├── embedder.py              # embedding calls
+│   │   ├── chunker.py              # text/media chunking
+│   │   ├── embedder.py             # embedding calls
 │   │   ├── embedding_integration.py # embedding pipeline integration
-│   │   ├── elr_ingestion.py         # ELR processing pipeline
-│   │   ├── pipeline.py              # orchestration
-│   │   └── redact.py                # PII/sensitive-field removal
+│   │   ├── elr_ingestion.py        # ELR processing pipeline
+│   │   ├── pipeline.py             # orchestration
+│   │   └── redact.py               # PII/sensitive-field removal
 │   ├── storage/
-│   │   ├── vector_store.py          # Chroma/FAISS adapters
-│   │   ├── kv_store.py              # Postgres/Redis adapters
-│   │   ├── session_store.py         # short-term memory
-│   │   └── elr_store.py             # ELR-specific storage
+│   │   ├── __init__.py
+│   │   ├── vector_store.py         # Chroma/FAISS adapters
+│   │   ├── kv_store.py             # Postgres/Redis adapters
+│   │   ├── session_store.py        # short-term memory
+│   │   ├── elr_store.py            # ELR-specific storage
+│   │   └── [additional storage adapters]
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── app.py                   # FastAPI application setup
-│   │   ├── config.py                # API configuration
-│   │   ├── http.py                  # FastAPI routes
-│   │   ├── main.py                  # Main API entry point
-│   │   ├── models.py                # API data models
-│   │   ├── grpc.proto               # gRPC definitions (optional)
+│   │   ├── app.py                  # FastAPI application setup
+│   │   ├── config.py               # API configuration
+│   │   ├── http.py                 # FastAPI routes
+│   │   ├── main.py                 # Main API entry point
+│   │   ├── models.py               # API data models
+│   │   ├── middleware.py           # API middleware
+│   │   ├── dependencies.py         # dependency injection
+│   │   ├── exceptions.py           # exception handlers
 │   │   └── endpoints/
 │   │       ├── __init__.py
-│   │       ├── ingestion.py         # Data ingestion endpoints
-│   │       ├── search.py            # Search endpoints
-│   │       └── users.py             # User management endpoints
+│   │       ├── ingestion.py        # Data ingestion endpoints
+│   │       ├── search.py           # Search endpoints
+│   │       ├── users.py            # User management endpoints
+│   │       ├── health.py           # Health check endpoints
+│   │       ├── kv.py               # Key-value endpoints
+│   │       ├── elr.py              # ELR-specific endpoints
+│   │       └── [additional endpoint modules]
 │   ├── auth/
-│   │   ├── rbac.py                  # role-based access checks
-│   │   └── consent.py               # consent enforcement
+│   │   ├── __init__.py
+│   │   └── rbac.py                 # role-based access checks
 │   ├── audit/
-│   │   ├── logger.py
-│   │   └── versions.py
+│   │   ├── __init__.py
+│   │   └── logger.py               # audit logging
+│   ├── integrations/
+│   │   ├── __init__.py
+│   │   └── [integration modules]
 │   └── utils/
-│       └── ids.py                   # id generation, hashing, etc.
+│       └── ids.py                  # id generation, hashing, etc.
 ├── scripts/
-│   ├── README.md                    # Scripts documentation
-│   ├── run_dev.sh                   # Development server
-│   └── run_api_server.py            # API server runner
+│   ├── README.md                   # Scripts documentation
+│   ├── run_dev.sh                  # Development server
+│   └── run_api_server.py           # API server runner
 └── tests/
-    ├── api/                         # API integration tests
-    ├── unit/                        # Unit tests
-    └── validation/                  # Validation test documentation
-
-# Note: Several proprietary scripts and components have been removed
-# from this public release. See individual README files for details.
+    ├── __init__.py
+    ├── api/                        # API integration tests
+    ├── unit/                       # Unit tests
+    └── validation/                 # Validation test documentation
 ~~~
 
 ---
@@ -113,11 +137,12 @@ git clone git@github.com:REMELife/luki-memory-service.git
 cd luki-memory-service
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+# Download required models
+python download_models.py
 # start local services (example: docker-compose)
-docker compose up -d   # launches postgres + chroma containers
-alembic upgrade head    # run DB migrations
-python scripts/load_demo_data.py
-uvicorn luki_memory.api.http:app --reload --port 8002
+docker compose up -d   # launches postgres + chroma containers (if using)
+# Run the API server
+uvicorn luki_memory.api.main:app --reload --port 8002
 ~~~
 
 ### Example: Ingest ELR text  
