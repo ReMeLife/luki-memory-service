@@ -1,0 +1,44 @@
+# Railway Ignore File
+# This file tells Railway what to exclude from deployment
+# Unlike .gitignore, we want to INCLUDE the gitignored files for deployment
+
+# Standard exclusions for Railway
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.env.local
+.env.development
+.env.test
+
+# Exclude development files
+.vscode/
+.idea/
+*.log
+logs/
+
+# Exclude test and debug files
+debug_*.py
+test_*.py
+tests/
+*validation_report.json
+htmlcov/
+coverage.xml
+
+# Keep all the git ignored files that are needed for deployment
+# (by NOT listing them here, they will be included)
+
+# EXPLICITLY ALLOW: critical gitignored dirs must be included despite being gitignored
+!_context/
+!luki_memory/api/fallback_knowledge.py
+!luki_memory/api/main_fixed.py
+!luki_memory/api/app.py
+!luki_memory/integrations/supabase_integration.py
+!luki_memory/api/endpoints/supabase.py
+!luki_memory/storage/knowledge_store.py
+
+# Exclude legacy reference code (do not upload to Railway)
+luki_memory/cache_backup/
+*_backup.py
+*_corrupted_backup.py
