@@ -1,0 +1,28 @@
+# Include all Python packages and modules
+recursive-include luki_memory *.py
+recursive-include luki_memory/api *.py
+recursive-include luki_memory/storage *.py
+recursive-include luki_memory/ingestion *.py
+recursive-include luki_memory/integrations *.py
+recursive-include luki_memory/schemas *.py
+recursive-include luki_memory/audit *.py
+recursive-include luki_memory/auth *.py
+
+# Include configuration files
+include *.toml
+include *.txt
+include *.md
+include *.yml
+include *.yaml
+
+# Include scripts
+recursive-include scripts *.py
+recursive-include scripts *.sh
+
+# Exclude development and cache files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *__pycache__*
+global-exclude .git*
+global-exclude .pytest_cache*
+global-exclude *.egg-info*
