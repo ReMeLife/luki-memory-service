@@ -121,7 +121,10 @@ luki-memory-migrate = "scripts.migrate:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["luki_memory*"]
-exclude = ["tests*", "docs*", "scripts*"]
+exclude = ["tests*", "docs*"]
+
+[tool.setuptools.package-dir]
+"" = "."
 
 [tool.setuptools.package-data]
 luki_memory = ["api/*.proto", "prompts/*.txt", "config/*.yaml"]
