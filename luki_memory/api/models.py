@@ -3,7 +3,7 @@
 Pydantic models for the Memory Service API
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from enum import Enum
@@ -50,11 +50,12 @@ class ELRIngestionRequest(BaseModel):
 
 class ELRIngestionResponse(BaseModel):
     """Response model for ELR ingestion."""
+    model_config = ConfigDict(extra='forbid')
     
-    success: bool = Field(..., description="Whether ingestion was successful")
-    message: str = Field(..., description="Status message")
-    processed_items: int = Field(..., description="Number of items processed")
-    embedded_chunks: int = Field(..., description="Number of chunks embedded")
+    success: bool = Field(..., description="Whether the ingestion was successful")
+    chunks_created: int = Field(..., description="Number of chunks created")
+    message: str = Field(..., description="Response message")
+    chunk_ids: Optional[List[str]] = Field(None, description="IDs of created chunks")
     processing_time_seconds: float = Field(..., description="Processing time in seconds")
     errors: List[str] = Field(default_factory=list, description="Any errors encountered")
     created_item_ids: List[str] = Field(default_factory=list, description="IDs of created items")
@@ -111,34 +112,35 @@ class MemorySearchResult(BaseModel):
 
 class MemorySearchResponse(BaseModel):
     """Response model for memory search."""
+    model_config = ConfigDict(extra='forbid')
     
-    success: bool = Field(..., description="Whether search was successful")
-    results: List[MemorySearchResult] = Field(..., description="Search results")
-    total_results: int = Field(..., description="Total number of results")
-    query_time_seconds: float = Field(..., description="Query execution time")
+    results: List[Dict[str, Any]] = Field(..., description="Search results")
+    total_count: int = Field(..., description="Total number of matching results")
+    query_time_ms: float = Field(..., description="Query execution time in milliseconds")
     user_id: str = Field(..., description="User ID searched")
 
 
 class UserMemoryStats(BaseModel):
-    """User memory statistics."""
+    """User memory statistics model."""
+    model_config = ConfigDict(extra='forbid')
     
-    user_id: str = Field(..., description="User identifier")
-    total_memories: int = Field(..., description="Total number of memories")
-    total_chunks: int = Field(..., description="Total number of chunks")
-    content_type_breakdown: Dict[str, int] = Field(..., description="Breakdown by content type")
-    sensitivity_breakdown: Dict[str, int] = Field(..., description="Breakdown by sensitivity")
-    earliest_memory: Optional[datetime] = Field(None, description="Earliest memory date")
-    latest_memory: Optional[datetime] = Field(None, description="Latest memory date")
-    storage_size_mb: float = Field(..., description="Approximate storage size in MB")
+    user_id: str
+    email: str
+    total_memories: int
+    recent_memories: int
+    content_types: Dict[str, int]
+    consent_levels: Dict[str, int]
+    last_updated: str
 
 
 class HealthResponse(BaseModel):
-    """Health check response."""
+    """Health check response model."""
+    model_config = ConfigDict(extra='forbid')
     
     status: str = Field(..., description="Service status")
     timestamp: datetime = Field(..., description="Response timestamp")
-    version: str = Field(..., description="API version")
-    pipeline_ready: bool = Field(..., description="Whether ELR pipeline is ready")
+    version: str = Field(..., description="Service version")
+    pipeline_ready: bool = Field(..., description="Whether the ELR pipeline is ready")
 
 
 class ErrorResponse(BaseModel):
@@ -154,15 +156,25 @@ class BatchIngestionRequest(BaseModel):
     """Request model for batch ELR ingestion."""
     
     batch_data: List[ELRIngestionRequest] = Field(
-        ...,
-        min_length=1,
-        max_length=100,
+        ..., 
         description="Batch of ELR ingestion requests"
     )
     batch_id: Optional[str] = Field(
         None,
         description="Optional batch identifier"
     )
+    
+    @field_validator('batch_data')
+    @classmethod
+    def validate_batch_data(cls, v):
+        """Validate batch data length constraints."""
+        if not isinstance(v, list):
+            raise ValueError("batch_data must be a list")
+        if len(v) < 1:
+            raise ValueError("batch_data must contain at least 1 item")
+        if len(v) > 100:
+            raise ValueError("batch_data cannot contain more than 100 items")
+        return v
 
 
 class BatchIngestionResponse(BaseModel):
@@ -180,8 +192,8 @@ class UserCreateRequest(BaseModel):
     """Request model for user creation."""
     
     user_id: str = Field(
-        ...,
-        min_length=1,
+        ..., 
+        min_length=1, 
         max_length=255,
         description="Unique user identifier"
     )
@@ -210,3 +222,67 @@ class UserResponse(BaseModel):
     last_activity: Optional[datetime] = Field(None, description="Last activity timestamp")
     memory_count: int = Field(0, description="Number of memories stored")
     is_active: bool = Field(True, description="Whether user is active")
+
+
+class UserUpdateRequest(BaseModel):
+    """Request model for user updates."""
+    
+    email: Optional[str] = Field(None, description="Updated email address")
+    full_name: Optional[str] = Field(None, max_length=500, description="Updated full name")
+    preferences: Optional[Dict[str, Any]] = Field(None, description="Updated preferences")
+    is_active: Optional[bool] = Field(None, description="Updated active status")
+
+
+class UserListResponse(BaseModel):
+    """Response model for user list operations."""
+    
+    users: List[UserResponse] = Field(..., description="List of users")
+    total_count: int = Field(..., description="Total number of users")
+    page: int = Field(1, description="Current page number")
+    page_size: int = Field(50, description="Number of users per page")
+
+
+class SupabaseMemoryRequest(BaseModel):
+    """Request model for Supabase memory operations."""
+    
+    user_id: str = Field(..., min_length=1, max_length=255, description="User identifier")
+    memory_data: Dict[str, Any] = Field(..., description="Memory data from Supabase")
+    source_table: Optional[str] = Field(None, description="Source Supabase table")
+    sync_timestamp: Optional[datetime] = Field(None, description="Synchronization timestamp")
+
+
+class SupabaseMemoryResponse(BaseModel):
+    """Response model for Supabase memory operations."""
+    
+    success: bool = Field(..., description="Whether operation was successful")
+    message: str = Field(..., description="Operation status message")
+    synced_records: int = Field(0, description="Number of records synchronized")
+    processing_time_seconds: float = Field(..., description="Processing time in seconds")
+    errors: List[str] = Field(default_factory=list, description="Any errors encountered")
+
+
+class LoginRequest(BaseModel):
+    """Request model for user login."""
+    
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., description="User password")
+
+
+class LoginResponse(BaseModel):
+    """Response model for user login."""
+    
+    success: bool = Field(..., description="Whether login was successful")
+    access_token: str = Field(..., description="Access token")
+    token_type: str = Field("bearer", description="Token type")
+    expires_in: int = Field(..., description="Token expiration time in seconds")
+    user: UserResponse = Field(..., description="User information")
+
+
+class TokenResponse(BaseModel):
+    """Response model for token operations."""
+    
+    access_token: str = Field(..., description="Access token")
+    token_type: str = Field("bearer", description="Token type")
+    expires_in: int = Field(..., description="Token expiration time in seconds")
+
+
