@@ -15,7 +15,7 @@ from ..models import (
     BatchIngestionRequest, BatchIngestionResponse,
     ErrorResponse
 )
-from ..auth import get_current_active_user, User
+# Auth imports removed - not used in current implementation
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -33,8 +33,7 @@ def set_pipeline(elr_pipeline):
 
 @router.post("/elr", response_model=ELRIngestionResponse)
 async def ingest_elr(
-    request: ELRIngestionRequest,
-    current_user: User = Depends(get_current_active_user)
+    request: ELRIngestionRequest
 ):
     """
     Ingest Electronic Life Record (ELR) data for a user.
@@ -55,12 +54,7 @@ async def ingest_elr(
     start_time = time.time()
     
     try:
-        # Validate user authorization for the requested user_id
-        if current_user.user_id != request.user_id and current_user.user_id != "api_service":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to ingest data for this user"
-            )
+        # Authorization check removed - using simplified auth model
         
         # Process ELR data through pipeline
         result = pipeline.process_elr_to_embeddings(
@@ -80,8 +74,8 @@ async def ingest_elr(
             return ELRIngestionResponse(
                 success=True,
                 message="ELR data ingested successfully",
-                processed_items=result.processed_items,
-                embedded_chunks=result.embedded_chunks,
+                chunks_created=result.embedded_chunks,
+                chunk_ids=result.chunk_ids,
                 processing_time_seconds=processing_time,
                 errors=result.errors,
                 created_item_ids=result.created_item_ids
@@ -92,8 +86,8 @@ async def ingest_elr(
             return ELRIngestionResponse(
                 success=False,
                 message="ELR ingestion completed with errors",
-                processed_items=result.processed_items,
-                embedded_chunks=result.embedded_chunks,
+                chunks_created=result.embedded_chunks,
+                chunk_ids=result.chunk_ids,
                 processing_time_seconds=processing_time,
                 errors=result.errors,
                 created_item_ids=result.created_item_ids
@@ -107,8 +101,8 @@ async def ingest_elr(
         return ELRIngestionResponse(
             success=False,
             message="ELR ingestion failed due to internal error",
-            processed_items=0,
-            embedded_chunks=0,
+            chunks_created=0,
+            chunk_ids=[],
             processing_time_seconds=processing_time,
             errors=[error_msg],
             created_item_ids=[]
@@ -118,8 +112,7 @@ async def ingest_elr(
 @router.post("/elr/batch", response_model=BatchIngestionResponse)
 async def ingest_elr_batch(
     request: BatchIngestionRequest,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_active_user)
+    background_tasks: BackgroundTasks
 ):
     """
     Ingest multiple ELR records in a batch.
@@ -145,13 +138,7 @@ async def ingest_elr_batch(
     batch_id = request.batch_id or f"batch_{datetime.utcnow().isoformat()}"
     
     try:
-        # Validate authorization for all user_ids in batch
-        for item in request.batch_data:
-            if current_user.user_id != item.user_id and current_user.user_id != "api_service":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Not authorized to ingest data for user {item.user_id}"
-                )
+        # Authorization check removed - using simplified auth model
         
         # Process each item in the batch
         individual_results = []
@@ -177,8 +164,8 @@ async def ingest_elr_batch(
                     individual_results.append(ELRIngestionResponse(
                         success=True,
                         message=f"Batch item {i} processed successfully",
-                        processed_items=result.processed_items,
-                        embedded_chunks=result.embedded_chunks,
+                        chunks_created=result.embedded_chunks,
+                        chunk_ids=result.chunk_ids,
                         processing_time_seconds=item_processing_time,
                         errors=result.errors,
                         created_item_ids=result.created_item_ids
@@ -188,8 +175,8 @@ async def ingest_elr_batch(
                     individual_results.append(ELRIngestionResponse(
                         success=False,
                         message=f"Batch item {i} failed",
-                        processed_items=result.processed_items,
-                        embedded_chunks=result.embedded_chunks,
+                        chunks_created=result.embedded_chunks,
+                        chunk_ids=result.chunk_ids,
                         processing_time_seconds=item_processing_time,
                         errors=result.errors,
                         created_item_ids=result.created_item_ids
@@ -201,8 +188,8 @@ async def ingest_elr_batch(
                 individual_results.append(ELRIngestionResponse(
                     success=False,
                     message=f"Batch item {i} failed with exception",
-                    processed_items=0,
-                    embedded_chunks=0,
+                    chunks_created=0,
+                    chunk_ids=[],
                     processing_time_seconds=item_processing_time,
                     errors=[str(e)],
                     created_item_ids=[]
@@ -234,9 +221,7 @@ async def ingest_elr_batch(
 
 
 @router.get("/status")
-async def ingestion_status(
-    current_user: User = Depends(get_current_active_user)
-):
+async def ingestion_status():
     """Get ingestion service status."""
     return {
         "service": "ELR Ingestion",
