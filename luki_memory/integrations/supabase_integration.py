@@ -11,15 +11,25 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
-import httpx
+from supabase import create_client, Client
 from pydantic import BaseModel, Field
 
 from ..ingestion.pipeline import ELRPipeline
 from ..storage.vector_store import EmbeddingStore
-from ..api.auth import User
+# User model defined locally to avoid auth module dependency
 from ..ingestion.chunker import ELRChunk
 
 logger = logging.getLogger(__name__)
+
+
+class User(BaseModel):
+    """Simple User model for authentication."""
+    user_id: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.now)
+    last_activity: Optional[datetime] = None
 
 
 class SupabaseConfig(BaseModel):
@@ -61,7 +71,7 @@ class SupabaseIntegration:
         self.config = config
         self.pipeline = elr_pipeline
         self.store = embedding_store
-        self.client = httpx.AsyncClient()
+        self.supabase: Client = create_client(config.url, config.anon_key)
         
         # Track processed users to avoid duplicate ingestion
         self.processed_users = set()
@@ -71,28 +81,20 @@ class SupabaseIntegration:
     async def verify_user_session(self, access_token: str) -> Optional[SupabaseSession]:
         """Verify user session with Supabase."""
         try:
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "apikey": self.config.anon_key,
-                "Content-Type": "application/json"
-            }
+            # Use Supabase client to verify user session
+            response = self.supabase.auth.get_user(access_token)
             
-            response = await self.client.get(
-                f"{self.config.url}/auth/v1/user",
-                headers=headers
-            )
-            
-            if response.status_code == 200:
-                user_data = response.json()
+            if response.user:
+                user_data = response.user
                 return SupabaseSession(
                     access_token=access_token,
                     refresh_token="",  # Not provided in user endpoint
-                    user_id=user_data["id"],
-                    email=user_data.get("email"),
-                    expires_at=datetime.fromisoformat(user_data["created_at"])
+                    user_id=user_data.id,
+                    email=user_data.email,
+                    expires_at=datetime.fromisoformat(user_data.created_at) if user_data.created_at else datetime.utcnow()
                 )
             else:
-                logger.warning(f"Failed to verify session: {response.status_code}")
+                logger.warning("Failed to verify session: Invalid token")
                 return None
                 
         except Exception as e:
@@ -102,31 +104,17 @@ class SupabaseIntegration:
     async def fetch_user_elr_data(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Fetch user's ELR data from Supabase."""
         try:
-            headers = {
-                "Authorization": f"Bearer {self.config.service_role_key}",
-                "apikey": self.config.anon_key,
-                "Content-Type": "application/json"
-            }
+            # Query ELR data table using Supabase client
+            response = self.supabase.table(self.config.elr_table).select("*").eq("user_id", user_id).execute()
             
-            # Query ELR data table
-            response = await self.client.get(
-                f"{self.config.url}/rest/v1/{self.config.elr_table}",
-                headers=headers,
-                params={"user_id": f"eq.{user_id}"}
-            )
-            
-            if response.status_code == 200:
-                elr_records = response.json()
-                if elr_records:
-                    # Combine all ELR records for the user
-                    combined_elr = self._combine_elr_records(elr_records)
-                    logger.info(f"Fetched ELR data for user {user_id}: {len(elr_records)} records")
-                    return combined_elr
-                else:
-                    logger.info(f"No ELR data found for user {user_id}")
-                    return None
+            if response.data:
+                elr_records = response.data
+                # Combine all ELR records for the user
+                combined_elr = self._combine_elr_records(elr_records)
+                logger.info(f"Fetched ELR data for user {user_id}: {len(elr_records)} records")
+                return combined_elr
             else:
-                logger.error(f"Failed to fetch ELR data: {response.status_code}")
+                logger.info(f"No ELR data found for user {user_id}")
                 return None
                 
         except Exception as e:
@@ -322,8 +310,9 @@ class SupabaseIntegration:
             return False
     
     async def close(self):
-        """Close the HTTP client."""
-        await self.client.aclose()
+        """Close the Supabase client."""
+        # Supabase client doesn't need explicit closing
+        pass
 
 
 def create_supabase_integration(
