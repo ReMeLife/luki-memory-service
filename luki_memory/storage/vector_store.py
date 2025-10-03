@@ -24,6 +24,9 @@ from ..ingestion.chunker import ELRChunk
 
 logger = logging.getLogger(__name__)
 
+# Cache SentenceTransformer models by name to avoid duplicate loads across stores
+_MODEL_CACHE: dict = {}
+
 
 class EmbeddingStoreError(Exception):
     """Custom exception for embedding store errors."""
@@ -53,7 +56,13 @@ class EmbeddingStore:
         
         # Initialize SentenceTransformer model
         try:
-            self.embedding_model = SentenceTransformer(model_name)
+            # Reuse a shared model instance if available
+            global _MODEL_CACHE
+            if model_name in _MODEL_CACHE:
+                self.embedding_model = _MODEL_CACHE[model_name]
+            else:
+                self.embedding_model = SentenceTransformer(model_name)
+                _MODEL_CACHE[model_name] = self.embedding_model
             self.embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
             logger.info(f"Loaded embedding model: {model_name} (dim: {self.embedding_dim})")
         except Exception as e:
@@ -108,7 +117,12 @@ class EmbeddingStore:
             Embedding vector as numpy array
         """
         try:
-            embedding = self.embedding_model.encode(text, convert_to_numpy=True)
+            # Disable progress bar for single-text encode to reduce TQDM overhead
+            embedding = self.embedding_model.encode(
+                text,
+                convert_to_numpy=True,
+                show_progress_bar=False
+            )
             return embedding
         except Exception as e:
             raise EmbeddingStoreError(f"Failed to generate embedding: {e}")
@@ -124,10 +138,11 @@ class EmbeddingStore:
             Embedding matrix as numpy array
         """
         try:
+            # Batch encode without progress bar to avoid excessive logging
             embeddings = self.embedding_model.encode(
-                texts, 
+                texts,
                 convert_to_numpy=True,
-                show_progress_bar=len(texts) > 10
+                show_progress_bar=False
             )
             return embeddings
         except Exception as e:
