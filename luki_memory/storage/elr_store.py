@@ -11,7 +11,7 @@ from datetime import datetime
 import hashlib
 import json
 
-from ..storage.vector_store import create_embedding_store
+from .vector_store import create_embedding_store
 # Settings will be passed as parameters instead of importing
 
 logger = logging.getLogger(__name__)
@@ -40,8 +40,10 @@ class ELRStore:
         self.persist_directory = persist_directory or "./chroma_db"
         
         # Create dedicated embedding store for ELR
+        from ..api.config import get_settings
+        settings = get_settings()
         self.store = create_embedding_store(
-            model_name="all-MiniLM-L12-v2",
+            model_name=settings.embedding_model,
             persist_directory=self.persist_directory,
             collection_name=self.collection_name
         )
