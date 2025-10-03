@@ -17,6 +17,11 @@ numpy==1.24.3
 # Database
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
+supabase==2.5.0
+postgrest==0.15.0
+realtime==1.0.6
+gotrue==1.3.0
+storage3==0.7.4
 
 # HTTP client
 httpx==0.25.2
