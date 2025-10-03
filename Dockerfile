@@ -35,9 +35,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"
 
-# Install runtime dependencies only
+# Install runtime dependencies including curl for health checks
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
@@ -96,12 +97,14 @@ RUN pip install -e . && \
     echo "=== VERIFYING PACKAGE INSTALLATION ===" && \
     python /tmp/verify.py
 
-# Expose port
+# Expose port (Railway provides PORT env var)
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Health check removed - Railway uses its own HTTP health check system via railway.toml
 
-# Start command
-CMD ["uvicorn", "luki_memory.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Create startup script that handles PORT env var
+RUN echo '#!/bin/bash\nuvicorn luki_memory.api.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --log-level info' > /start.sh && \
+    chmod +x /start.sh
+
+# Start command - use shell to expand PORT variable
+CMD ["/bin/bash", "/start.sh"]
