@@ -38,10 +38,9 @@ class TextRedactor:
         except OSError:
             logger.warning(f"spaCy model {spacy_model} not found, using basic English")
             self.nlp = English()
-        
-        # Add sentencizer component if not present
-        if "sentencizer" not in self.nlp.pipe_names:
-            self.nlp.add_pipe("sentencizer")
+            # Add sentencizer component if not present
+            if "sentencizer" not in self.nlp.pipe_names:
+                self.nlp.add_pipe("sentencizer")
     
     def extract_entities(self, text: str) -> Dict[str, List[str]]:
         """
@@ -108,6 +107,35 @@ class TextRedactor:
                     f"[{ent.label_}]" + 
                     redacted_text[ent.end_char:]
                 )
+        
+        return redacted_text
+    
+    def _basic_redaction(self, text: str) -> str:
+        """
+        Basic redaction using simple patterns when spaCy is not available.
+        
+        Args:
+            text: Input text to redact
+            
+        Returns:
+            Text with basic patterns redacted
+        """
+        import re
+        
+        # Basic patterns for common PII
+        patterns = [
+            (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]'),
+            (r'\b\d{3}-\d{3}-\d{4}\b', '[PHONE]'),
+            (r'\b\d{3}\.\d{3}\.\d{4}\b', '[PHONE]'),
+            (r'\b\d{10}\b', '[PHONE]'),
+            (r'\b\d{1,2}/\d{1,2}/\d{4}\b', '[DATE]'),
+            (r'\b\d{4}-\d{2}-\d{2}\b', '[DATE]'),
+            (r'\$\d+(?:,\d{3})*(?:\.\d{2})?', '[MONEY]'),
+        ]
+        
+        redacted_text = text
+        for pattern, replacement in patterns:
+            redacted_text = re.sub(pattern, replacement, redacted_text)
         
         return redacted_text
     
