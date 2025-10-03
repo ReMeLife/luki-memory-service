@@ -14,8 +14,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Union, Optional
 
-import spacy
-from spacy.lang.en import English
+# Optional spacy import for advanced text processing
+try:
+    import spacy
+    from spacy.lang.en import English
+    SPACY_AVAILABLE = True
+except ImportError:
+    SPACY_AVAILABLE = False
+    spacy = None
+    English = None
 
 from ..schemas.elr import ConsentLevel, SensitivityLevel, ELRContentType, ELRChunk as SchemaELRChunk
 
@@ -32,19 +39,24 @@ class TextChunker:
     def __init__(self, spacy_model: str = "en_core_web_sm"):
         """Initialize chunker with spaCy model."""
         self.spacy_model = spacy_model
+        self.nlp = None
         
-        try:
-            self.nlp = spacy.load(spacy_model)
-        except OSError:
+        if SPACY_AVAILABLE and spacy is not None:
             try:
-                # Try the small model as fallback
-                self.nlp = spacy.load("en_core_web_sm")
-                logger.warning(f"spaCy model {spacy_model} not found, using en_core_web_sm")
+                self.nlp = spacy.load(spacy_model)
             except OSError:
-                logger.warning(f"spaCy model {spacy_model} not found, using basic English")
-                self.nlp = English()
-                # Add sentencizer to basic English pipeline
-                self.nlp.add_pipe('sentencizer')
+                try:
+                    # Try the small model as fallback
+                    self.nlp = spacy.load("en_core_web_sm")
+                    logger.warning(f"spaCy model {spacy_model} not found, using en_core_web_sm")
+                except OSError:
+                    logger.warning(f"spaCy model {spacy_model} not found, using basic English")
+                    if English is not None:
+                        self.nlp = English()
+                        # Add sentencizer to basic English pipeline
+                        self.nlp.add_pipe('sentencizer')
+        else:
+            logger.warning("spaCy not available, using simple text splitting")
         
         self.chunk_size = 512  # Max tokens per chunk
         self.overlap_size = 50  # Token overlap between chunks
@@ -62,8 +74,13 @@ class TextChunker:
         Returns:
             List of ELR chunks
         """
-        doc = self.nlp(text)
-        sentences = [sent.text for sent in doc.sents]
+        # Use spacy if available, otherwise simple sentence splitting
+        if self.nlp is not None:
+            doc = self.nlp(text)
+            sentences = [sent.text for sent in doc.sents]
+        else:
+            # Simple sentence splitting fallback
+            sentences = [s.strip() + '.' for s in text.split('.') if s.strip()]
         
         chunks = []
         current_chunk = ""
@@ -76,7 +93,12 @@ class TextChunker:
         sensitivity_level = SensitivityLevel(metadata.get("sensitivity_level", "personal"))
         
         for sentence in sentences:
-            sentence_tokens = len(self.nlp(sentence))
+            # Use spacy for token counting if available, otherwise estimate
+            if self.nlp is not None:
+                sentence_tokens = len(self.nlp(sentence))
+            else:
+                # Simple word-based token estimation
+                sentence_tokens = len(sentence.split())
             
             if current_tokens + sentence_tokens > self.chunk_size and current_chunk:
                 # Create chunk
