@@ -137,7 +137,7 @@ async def search_memories_test(
     Test endpoint for memory search without authentication.
     Used for integration testing.
     """
-    if pipeline is None:
+    if elr_store is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="ELR pipeline not initialized"
@@ -147,7 +147,7 @@ async def search_memories_test(
     
     try:
         # Perform semantic search
-        search_results = pipeline.search_user_memories(
+        search_results = elr_store.search_user_memories(
             user_id=request.user_id,
             query=request.query,
             k=min(request.k, settings.max_search_results)
@@ -238,7 +238,7 @@ async def search_memories(
             user_id=request.user_id
         )
     
-    if pipeline is None:
+    if elr_store is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="ELR pipeline not initialized"
@@ -250,7 +250,7 @@ async def search_memories(
     
     try:
         # Perform semantic search
-        search_results = pipeline.search_user_memories(
+        search_results = elr_store.search_user_memories(
             user_id=request.user_id,
             query=request.query,
             k=min(request.k, settings.max_search_results)
@@ -289,7 +289,7 @@ async def search_memories(
                 metadata=result.get('metadata', {}),
                 chunk_id=result.get('id', ''),
                 created_at=datetime.fromisoformat(result_created_at.replace('Z', '+00:00')) if result_created_at else datetime.utcnow()
-            ))
+            ).model_dump())
         
         query_time = time.time() - start_time
         
@@ -394,7 +394,7 @@ async def get_user_memory_stats(
     """
     # Authorization check removed - using simplified auth model
     
-    if pipeline is None:
+    if elr_store is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="ELR pipeline not initialized"
@@ -402,7 +402,7 @@ async def get_user_memory_stats(
     
     try:
         # Get all memories for the user (large k value to get everything)
-        all_memories = pipeline.search_user_memories(
+        all_memories = elr_store.search_user_memories(
             user_id=user_id,
             query="",  # Empty query to get all memories
             k=10000  # Large number to get all results
@@ -475,7 +475,7 @@ async def find_similar_memories(
     """
     # Authorization check removed - using simplified auth model
     
-    if pipeline is None:
+    if elr_store is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="ELR pipeline not initialized"
@@ -483,7 +483,7 @@ async def find_similar_memories(
     
     try:
         # First, get the content of the specified chunk
-        all_memories = pipeline.search_user_memories(
+        all_memories = elr_store.search_user_memories(
             user_id=user_id,
             query="",
             k=10000
@@ -505,7 +505,7 @@ async def find_similar_memories(
         target_content = target_memory.get('content', '')
         
         # Search for similar memories
-        similar_memories = pipeline.search_user_memories(
+        similar_memories = elr_store.search_user_memories(
             user_id=user_id,
             query=target_content,
             k=k + 1  # +1 to account for the original memory
@@ -526,7 +526,7 @@ async def find_similar_memories(
                 metadata=result.get('metadata', {}),
                 chunk_id=result.get('id', ''),
                 created_at=datetime.utcnow()  # Default timestamp
-            ))
+            ).model_dump())
         
         logger.info(f"Found {len(formatted_results)} similar memories for chunk {chunk_id}")
         
