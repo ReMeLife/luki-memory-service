@@ -37,11 +37,13 @@ class ELRStore:
             collection_name: Name of the collection for ELR data
         """
         self.collection_name = collection_name
-        self.persist_directory = persist_directory or "./chroma_db"
         
-        # Create dedicated embedding store for ELR
+        # Get settings to read ChromaDB path from environment
         from ..api.config import get_settings
         settings = get_settings()
+        
+        # Use provided path, or fall back to settings (which reads from CHROMA_PERSIST_DIR env var)
+        self.persist_directory = persist_directory or settings.vector_db_path
         self.store = create_embedding_store(
             model_name=settings.embedding_model,
             persist_directory=self.persist_directory,
@@ -117,6 +119,38 @@ class ELRStore:
         Returns:
             List of matching memory chunks
         """
+        # Special case: if query is just whitespace, get all user memories
+        if not query or query.strip() == "":
+            # Get all documents for this user directly from ChromaDB
+            try:
+                # Use large limit to get ALL memories for listing
+                actual_limit = max(k, 1000)  # Ensure we get all memories, not just k
+                results = self.store.collection.get(
+                    where={"user_id": user_id},
+                    limit=actual_limit,
+                    include=["documents", "metadatas", "embeddings"]
+                )
+                
+                user_results = []
+                if results and results.get("ids"):
+                    docs = results.get("documents") or []
+                    metas = results.get("metadatas") or []
+                    logger.info(f"Direct retrieval found {len(results['ids'])} memories for user {user_id}")
+                    for i, chunk_id in enumerate(results["ids"]):
+                        user_results.append({
+                            "id": chunk_id,
+                            "content": docs[i] if i < len(docs) else "",
+                            "metadata": metas[i] if i < len(metas) else {},
+                            "similarity_score": 1.0,  # Max score for direct retrieval
+                            "distance": 0.0
+                        })
+                else:
+                    logger.warning(f"No memories found in ChromaDB for user {user_id}")
+                return user_results
+            except Exception as e:
+                logger.warning(f"Direct retrieval failed for user {user_id}: {e}")
+                # Fall back to regular search
+        
         # Perform semantic search with user isolation
         all_results = self.store.search_similar(
             query=query,
