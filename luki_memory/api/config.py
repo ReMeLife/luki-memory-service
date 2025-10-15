@@ -38,7 +38,11 @@ class Settings(BaseSettings):  # type: ignore
     spacy_model: str = "en_core_web_sm"
     
     # Vector Database Configuration
-    vector_db_path: str = "/data/chroma_db"
+    # Reads from CHROMA_PERSIST_DIR environment variable, falls back to /data/chroma_db
+    vector_db_path: str = Field(
+        default="/data/chroma_db",
+        alias="CHROMA_PERSIST_DIR"
+    )
     collection_name: str = "elr_embeddings"
     
     # Authentication Configuration
