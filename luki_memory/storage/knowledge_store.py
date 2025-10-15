@@ -37,11 +37,13 @@ class ProjectKnowledgeStore:
             collection_name: Name of the collection for project knowledge
         """
         self.collection_name = collection_name
-        self.persist_directory = persist_directory or "./chroma_db"
         
-        # Create dedicated embedding store for project knowledge
+        # Get settings to read ChromaDB path from environment
         from ..api.config import get_settings
         settings = get_settings()
+        
+        # Use provided path, or fall back to settings (which reads from CHROMA_PERSIST_DIR env var)
+        self.persist_directory = persist_directory or settings.vector_db_path
         self.store = create_embedding_store(
             model_name=settings.embedding_model,
             persist_directory=self.persist_directory,
