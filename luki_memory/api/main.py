@@ -26,7 +26,7 @@ from .models import (
     UserMemoryStats, HealthResponse
 )
 from .config import get_settings
-from .endpoints import ingestion, search
+from .endpoints import ingestion, search, delete
 try:
     from .endpoints.supabase import router as supabase_router
 except ImportError:
@@ -49,10 +49,16 @@ project_knowledge_loaded = False
 
 async def delayed_startup_background():
     """Wait for health checks to pass, then start full initialization."""
-    # Wait 30 seconds to let Railway health checks pass first
-    await asyncio.sleep(30)
+    # Wait 10 seconds to let Railway health checks pass first (reduced from 30)
+    await asyncio.sleep(10)
     logger.info("Starting delayed background initialization after health check window...")
-    await full_startup_background()
+    try:
+        await full_startup_background()
+        logger.info("✅ Background initialization completed successfully")
+    except Exception as e:
+        logger.error(f"❌ Background initialization failed: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -228,7 +234,13 @@ async def initialize_stores_background():
         logger.info("Initializing ELR store...")
         elr_store = get_elr_store()
         search.set_elr_store(elr_store)
+        delete.set_elr_store(elr_store)  # Inject ELR store into delete module
         logger.info("ELR store initialized successfully")
+        
+        # Initialize the ingestion pipeline with the ELR store
+        logger.info("Setting up ingestion pipeline...")
+        ingestion.set_pipeline(elr_store)
+        logger.info("Ingestion pipeline configured successfully")
         
         logger.info("Background store initialization completed successfully")
     except Exception as e:
@@ -420,6 +432,7 @@ async def health_check():
 # Include routers
 app.include_router(ingestion.router)
 app.include_router(search.router)
+app.include_router(delete.router)
 
 # Include auth router
 if auth_router:
