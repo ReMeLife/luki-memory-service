@@ -339,7 +339,13 @@ def create_supabase_integration(
         elr_pipeline = ELRPipeline()
     
     if embedding_store is None:
-        embedding_store = EmbeddingStore()
+        # Read ChromaDB path from settings (which reads CHROMA_PERSIST_DIR env var)
+        from ..api.config import get_settings
+        settings = get_settings()
+        embedding_store = EmbeddingStore(
+            persist_directory=settings.vector_db_path,
+            collection_name="elr_embeddings"
+        )
     
     return SupabaseIntegration(config, elr_pipeline, embedding_store)
 
