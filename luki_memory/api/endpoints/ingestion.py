@@ -56,13 +56,49 @@ async def ingest_elr(
     try:
         # Authorization check removed - using simplified auth model
         
-        # Process ELR data through pipeline
-        result = pipeline.process_elr_to_embeddings(
-            elr_data=request.elr_data,
+        # Process ELR data through pipeline (ELR store)
+        # Handle both dict and object types for elr_data
+        if isinstance(request.elr_data, dict):
+            # If elr_data is a dict (from API)
+            elr_content = request.elr_data.get('content', '')
+            elr_content_type = request.elr_data.get('content_type', 'CONVERSATION')
+            elr_timestamp = request.elr_data.get('timestamp') or datetime.utcnow().isoformat()
+            elr_metadata = request.elr_data.get('metadata', {})
+        else:
+            # If elr_data is an object (Pydantic model)
+            elr_content = request.elr_data.content
+            elr_content_type = request.elr_data.content_type.value if hasattr(request.elr_data.content_type, 'value') else str(request.elr_data.content_type)
+            elr_timestamp = request.elr_data.timestamp or datetime.utcnow().isoformat()
+            elr_metadata = request.elr_data.metadata if hasattr(request.elr_data, 'metadata') else {}
+        
+        metadata = {
+            "source_file": request.source_file or f"api_upload_{datetime.utcnow().isoformat()}",
+            "consent_level": request.consent_level.value if hasattr(request.consent_level, 'value') else str(request.consent_level),
+            "sensitivity_level": request.sensitivity_level.value if hasattr(request.sensitivity_level, 'value') else str(request.sensitivity_level),
+            "content_type": elr_content_type,
+            "timestamp": elr_timestamp
+        }
+        
+        # Add any additional metadata from the ELR data
+        if elr_metadata:
+            metadata.update(elr_metadata)
+        
+        # Add the memory using the ELR store's add_memory method
+        chunk_id = pipeline.add_memory(
             user_id=request.user_id,
-            source_file=request.source_file or f"api_upload_{datetime.utcnow().isoformat()}",
-            consent_level=request.consent_level,
-            sensitivity_level=request.sensitivity_level
+            content=elr_content,
+            metadata=metadata
+        )
+        
+        # Create a successful result using a simple namespace
+        from types import SimpleNamespace
+        result = SimpleNamespace(
+            success=True,
+            processed_items=1,
+            embedded_chunks=1,
+            chunk_ids=[chunk_id],
+            errors=[],
+            created_item_ids=[chunk_id]
         )
         
         processing_time = time.time() - start_time
