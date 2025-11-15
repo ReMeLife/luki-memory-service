@@ -472,6 +472,20 @@ async def update_user_preferences(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/users/{user_id}/profile")
+async def get_user_memory_profile(user_id: str, current_user: str = Depends(get_current_user)):
+    try:
+        if not elr_to_vector_pipeline:
+            raise HTTPException(status_code=500, detail="Embedding pipeline not initialized")
+        stats = elr_to_vector_pipeline.get_user_memory_stats(user_id)
+        return stats
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting user memory profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Admin Endpoints (would require admin role in production)
 @app.get("/admin/stats")
 async def get_service_stats(user_id: str = Depends(get_current_user)):

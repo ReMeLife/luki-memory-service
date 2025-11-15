@@ -1,0 +1,41 @@
+FORCE RESTART MEMORY SERVICE - CRITICAL FIX: ChromaDB Path
+Memory Service Update - Environment Variable Fix (Final)
+Timestamp: 2025-10-06T10:39:00
+Deploy Trigger: railway_deploy_v8_supabase_integration_fix
+
+CRITICAL FIX: ChromaDB Persistence Path
+
+PROBLEM:
+- CHROMA_PERSIST_DIR environment variable was set to /app/data/chroma_db
+- But THREE locations were hardcoded to use "./chroma_db" or "/data/chroma_db"
+- Result: ChromaDB created database in container storage (not on volume)
+- Every redeploy = fresh database, all memories lost
+
+ROOT CAUSE:
+1. config.py had hardcoded vector_db_path = "/data/chroma_db"
+2. elr_store.py defaulted to "./chroma_db" instead of reading settings
+3. knowledge_store.py defaulted to "./chroma_db" instead of reading settings
+4. supabase_integration.py created EmbeddingStore() with no path parameter
+5. supabase.py endpoint created EmbeddingStore() with no path parameter
+
+SOLUTION:
+- Changed config.py to read from CHROMA_PERSIST_DIR env var (with Field alias)
+- Changed elr_store.py to use settings.vector_db_path instead of hardcoded path
+- Changed knowledge_store.py to use settings.vector_db_path instead of hardcoded path
+- All three now properly use /app/data/chroma_db (on the persistent volume)
+
+FILES CHANGED:
+- luki_memory/api/config.py lines 41-45 (reads CHROMA_PERSIST_DIR)
+- luki_memory/storage/elr_store.py lines 40-46 (uses settings.vector_db_path)
+- luki_memory/storage/knowledge_store.py lines 40-46 (uses settings.vector_db_path)
+- luki_memory/integrations/supabase_integration.py lines 341-348 (reads settings.vector_db_path)
+- luki_memory/api/endpoints/supabase.py lines 172-177 (reads config.vector_db_path)
+
+RESULT:
+✅ Project knowledge (LUKi identity): Will persist in /app/data/chroma_db
+✅ User memories (ELR): Will persist in /app/data/chroma_db
+✅ Supabase integration embeddings: Will persist in /app/data/chroma_db
+✅ ALL THREE on the persistent volume, survive redeploys
+✅ Environment variable properly respected in ALL locations
+
+This file forces Railway to detect changes and redeploy
