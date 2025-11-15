@@ -256,18 +256,49 @@ async def search_memories(
             metadata_filter.update({
                 "content_type": {"$in": [ct.value for ct in query.content_types]}
             })
-        results = embedding_store.search_similar(
+        # Basic pagination: request a larger window if offset is set, capped to a safe maximum
+        effective_k = query.limit + query.offset if query.offset > 0 else query.limit
+        if effective_k > 100:
+            effective_k = 100
+
+        raw_results = embedding_store.search_similar(
             query=query.query_text,
-            k=query.limit,
+            k=effective_k,
             similarity_threshold=query.similarity_threshold,
             consent_filter=[level.value for level in query.consent_levels] if query.consent_levels else None,
             metadata_filter=metadata_filter
         )
         
+        # Optional post-filtering by sensitivity_levels and tags using metadata
+        allowed_sensitivity = {level.value for level in query.sensitivity_levels} if query.sensitivity_levels else None
+        required_tags = set(query.tags) if query.tags else None
+
+        filtered_results = []
+        for result in raw_results:
+            metadata = result.get("metadata", {}) or {}
+            if allowed_sensitivity:
+                sensitivity_value = (
+                    metadata.get("sensitivity_level")
+                    or metadata.get("sensitivity")
+                    or "personal"
+                )
+                if sensitivity_value not in allowed_sensitivity:
+                    continue
+            if required_tags:
+                tags = metadata.get("tags") or []
+                if not any(tag in required_tags for tag in tags):
+                    continue
+            filtered_results.append(result)
+        
+        total_results = len(filtered_results)
+        start_index = min(query.offset, total_results)
+        end_index = min(start_index + query.limit, total_results)
+        page_results = filtered_results[start_index:end_index]
+        
         # Convert to SearchResponse format
         from ..schemas.query import SearchResult
         search_results = []
-        for i, result in enumerate(results):
+        for i, result in enumerate(page_results):
             from ..schemas.elr import ELRContentType, SensitivityLevel, ConsentLevel
             metadata = result.get("metadata", {})
             
@@ -277,7 +308,7 @@ async def search_memories(
                 content=result.get("content", ""),
                 title=metadata.get("title"),
                 relevance_score=1.0 - result.get("distance", 0.0),  # Convert distance to similarity
-                rank=i + 1,
+                rank=start_index + i + 1,
                 content_type=ELRContentType(metadata.get("content_type", "memory")),
                 consent_level=ConsentLevel(metadata.get("consent_level", "private")),
                 sensitivity_level=SensitivityLevel(metadata.get("sensitivity_level", "personal")),
@@ -298,11 +329,11 @@ async def search_memories(
             query_text=query.query_text,
             query_type=query.query_type,
             results=search_results,
-            total_results=len(search_results),
+            total_results=total_results,
             returned_results=len(search_results),
             offset=query.offset,
             limit=query.limit,
-            has_more=False,  # Would implement proper pagination
+            has_more=total_results > end_index,
             execution_time_ms=0.0,  # Would measure actual execution time
             processed_query=query.query_text,  # For now, same as original
             query_terms=query.query_text.split(),  # Simple tokenization
