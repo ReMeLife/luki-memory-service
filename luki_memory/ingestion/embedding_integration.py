@@ -478,20 +478,97 @@ class ELRToVectorPipeline:
     def get_user_memory_stats(self, user_id: str) -> Dict[str, Any]:
         """Get statistics about a user's stored memories."""
         try:
-            # This is a simplified implementation
-            # In a full implementation, we'd query the vector store for user-specific stats
-            collection_stats = self.embedding_store.get_collection_stats()
-            
+            if not self.embedding_store or not getattr(self.embedding_store, "collection", None):
+                return {
+                    "user_id": user_id,
+                    "total_memories": 0,
+                    "total_chunks": 0,
+                    "content_type_breakdown": {},
+                    "sensitivity_breakdown": {},
+                    "earliest_memory": None,
+                    "latest_memory": None,
+                    "storage_size_mb": 0.0,
+                }
+
+            results = self.embedding_store.collection.get(
+                where={"user_id": user_id},
+                include=["metadatas"],
+            )
+
+            metadatas = results.get("metadatas") or []
+            if metadatas and isinstance(metadatas[0], list):
+                flat_metadatas = metadatas[0]
+            else:
+                flat_metadatas = metadatas
+
+            total_chunks = len(flat_metadatas)
+
+            content_type_breakdown: Dict[str, int] = {}
+            sensitivity_breakdown: Dict[str, int] = {}
+            earliest: Optional[datetime] = None
+            latest: Optional[datetime] = None
+
+            for meta in flat_metadatas:
+                if not isinstance(meta, dict):
+                    continue
+
+                content_type = str(meta.get("content_type") or "memory")
+                content_type_breakdown[content_type] = content_type_breakdown.get(content_type, 0) + 1
+
+                sensitivity = str(
+                    meta.get("sensitivity_level")
+                    or meta.get("sensitivity")
+                    or "personal"
+                )
+                sensitivity_breakdown[sensitivity] = sensitivity_breakdown.get(sensitivity, 0) + 1
+
+                created_at_raw = meta.get("created_at")
+                if created_at_raw:
+                    try:
+                        created_at = datetime.fromisoformat(str(created_at_raw))
+                        if earliest is None or created_at < earliest:
+                            earliest = created_at
+                        if latest is None or created_at > latest:
+                            latest = created_at
+                    except Exception:
+                        # Ignore malformed timestamps
+                        pass
+
+            parent_ids = set()
+            for meta in flat_metadatas:
+                if isinstance(meta, dict):
+                    parent_id = meta.get("parent_item_id")
+                    if parent_id:
+                        parent_ids.add(str(parent_id))
+
+            total_memories = len(parent_ids) if parent_ids else total_chunks
+
+            estimated_bytes = total_chunks * 1024
+            storage_size_mb = round(estimated_bytes / (1024 * 1024), 3)
+
             return {
                 "user_id": user_id,
-                "total_chunks_in_collection": collection_stats.get("total_chunks", 0),
-                "embedding_model": collection_stats.get("model_name", "unknown"),
-                "last_updated": datetime.utcnow().isoformat()
+                "total_memories": total_memories,
+                "total_chunks": total_chunks,
+                "content_type_breakdown": content_type_breakdown,
+                "sensitivity_breakdown": sensitivity_breakdown,
+                "earliest_memory": earliest.isoformat() if earliest else None,
+                "latest_memory": latest.isoformat() if latest else None,
+                "storage_size_mb": storage_size_mb,
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting user memory stats: {e}")
-            return {}
+            return {
+                "user_id": user_id,
+                "total_memories": 0,
+                "total_chunks": 0,
+                "content_type_breakdown": {},
+                "sensitivity_breakdown": {},
+                "earliest_memory": None,
+                "latest_memory": None,
+                "storage_size_mb": 0.0,
+            }
 
 
 def create_elr_to_vector_pipeline(
