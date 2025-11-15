@@ -251,7 +251,7 @@ async def search_memories(
             raise HTTPException(status_code=403, detail="Cannot search other users' data")
         
         # Perform search
-        metadata_filter = {"user_id": user_id}
+        metadata_filter: Dict[str, Any] = {"user_id": user_id}
         if query.content_types:
             metadata_filter.update({
                 "content_type": {"$in": [ct.value for ct in query.content_types]}
@@ -477,21 +477,57 @@ async def update_user_preferences(
 async def get_service_stats(user_id: str = Depends(get_current_user)):
     """Get service statistics."""
     try:
+        emb_stats: Dict[str, Any] = {}
+        if embedding_store:
+            try:
+                emb_stats = embedding_store.get_collection_stats()
+            except Exception as e:
+                logger.error(f"Error getting embedding store stats: {e}")
+                emb_stats = {}
+
         stats = {
             "timestamp": datetime.utcnow().isoformat(),
             "embedding_store": {
-                "collections": 1,  # Would get actual stats
-                "total_embeddings": 0
+                "collections": 1,
+                "total_embeddings": emb_stats.get("total_chunks", 0),
+                "collection_name": emb_stats.get("collection_name", "unknown"),
+                "embedding_model": emb_stats.get("embedding_model", "unknown"),
             },
             "kv_store": {
                 "total_keys": 0
             },
             "active_sessions": 0
         }
-        
+
         return stats
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/embeddings/reset")
+async def reset_embedding_collection(user_id: str = Depends(get_current_user)):
+    try:
+        if not embedding_store:
+            raise HTTPException(status_code=500, detail="Embedding store not initialized")
+
+        success = embedding_store.reset_collection()
+        details: Dict[str, Any] = {}
+        if success:
+            try:
+                details = embedding_store.get_collection_stats()
+            except Exception as e:
+                logger.error(f"Error fetching stats after reset: {e}")
+
+        return {
+            "success": bool(success),
+            "timestamp": datetime.utcnow().isoformat(),
+            "details": details,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resetting embedding collection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
