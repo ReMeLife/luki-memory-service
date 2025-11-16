@@ -1,8 +1,11 @@
 """Metrics endpoints for LUKi Memory Service.
 
 These endpoints expose high-level activity, mood, and engagement metrics
-for use by downstream services like the reporting module. For now they
-return empty datasets so callers can safely fall back to demo data.
+for use by downstream services like the reporting module. Metrics are
+derived from ELR chunks stored in the ELR store (ChromaDB) using only
+metadata and timestamps. If no relevant memories exist for the requested
+date range, the responses contain empty lists so callers can fall back to
+their own demo or default data.
 """
 
 from datetime import date, datetime
@@ -105,8 +108,8 @@ class EngagementResponse(BaseModel):
 async def get_activity_metrics(user_id: str, start_date: date, end_date: date) -> ActivitiesResponse:
     """Return activity metrics for a user over a date range.
 
-    Currently returns an empty list so downstream callers can fall back
-    to demo data while the real metrics pipeline is being implemented.
+    Activity logs are derived from ELR metadata for the given user and
+    date range. If no memories match, an empty list is returned.
     """
     if end_date < start_date:
         return ActivitiesResponse(activities=[])
@@ -125,8 +128,9 @@ async def get_activity_metrics(user_id: str, start_date: date, end_date: date) -
 async def get_mood_metrics(user_id: str, start_date: date, end_date: date) -> MoodResponse:
     """Return mood metrics for a user over a date range.
 
-    Currently returns an empty list so downstream callers can fall back
-    to demo data while the real metrics pipeline is being implemented.
+    Mood entries are inferred from ELR metadata (e.g. health or mood
+    related sections) for the given user and date range. If no
+    mood-related memories are available, an empty list is returned.
     """
     if end_date < start_date:
         return MoodResponse(mood_entries=[])
@@ -145,8 +149,9 @@ async def get_mood_metrics(user_id: str, start_date: date, end_date: date) -> Mo
 async def get_engagement_metrics(user_id: str, start_date: date, end_date: date) -> EngagementResponse:
     """Return engagement metrics for a user over a date range.
 
-    Currently returns an empty list so downstream callers can fall back
-    to demo data while the real metrics pipeline is being implemented.
+    Engagement metrics are aggregated per day from ELR-derived activity
+    and mood records for the given user. If no underlying activity exists
+    in the requested window, an empty metrics list is returned.
     """
     if end_date < start_date:
         return EngagementResponse(metrics=[])
