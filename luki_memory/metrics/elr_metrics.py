@@ -330,8 +330,8 @@ def build_engagement_metrics_from_elr(
     })
 
     for act in activity_records:
-        ts: datetime = act["timestamp"]
-        d = ts.date()
+        ts_activity = act["timestamp"]
+        d = ts_activity.date()
         if d < start_date or d > end_date:
             continue
         bucket = by_date[d]
@@ -370,8 +370,8 @@ def build_engagement_metrics_from_elr(
         bucket["_engagement_samples"] = sample_count + 1
 
     for mood in mood_records:
-        ts: datetime = mood["timestamp"]
-        d = ts.date()
+        ts_mood = mood["timestamp"]
+        d = ts_mood.date()
         if d < start_date or d > end_date:
             continue
         bucket = by_date[d]
