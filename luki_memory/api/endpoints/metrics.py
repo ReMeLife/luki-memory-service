@@ -5,14 +5,18 @@ for use by downstream services like the reporting module. For now they
 return empty datasets so callers can safely fall back to demo data.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any, Dict, List
 from enum import Enum
-from uuid import uuid4
-import random
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+
+from ...metrics.elr_metrics import (
+    build_activity_logs_from_elr,
+    build_mood_entries_from_elr,
+    build_engagement_metrics_from_elr,
+)
 
 
 router = APIRouter(prefix="/v1/metrics", tags=["metrics"])
@@ -107,37 +111,12 @@ async def get_activity_metrics(user_id: str, start_date: date, end_date: date) -
     if end_date < start_date:
         return ActivitiesResponse(activities=[])
 
-    activities: List[ActivityLogDTO] = []
-    # Simple demo activity templates reused across days
-    activity_templates = [
-        ("Morning Walk", ActivityType.PHYSICAL),
-        ("Crossword Puzzle", ActivityType.COGNITIVE),
-        ("Family Video Call", ActivityType.SOCIAL),
-    ]
-
-    current = start_date
-    while current <= end_date:
-        for idx, (name, activity_type) in enumerate(activity_templates):
-            hour = 9 + idx * 3
-            ts = datetime.combine(current, datetime.min.time()).replace(hour=hour)
-            duration = 30 + idx * 15
-            engagement = random.choice(list(EngagementLevel))
-            completion = round(0.7 + 0.1 * idx, 2)
-            activities.append(
-                ActivityLogDTO(
-                    id=str(uuid4()),
-                    user_id=user_id,
-                    timestamp=ts,
-                    activity_type=activity_type,
-                    activity_name=name,
-                    duration_minutes=duration,
-                    engagement_level=engagement,
-                    completion_rate=min(completion, 1.0),
-                    notes="Generated demo activity log from memory service metrics endpoint",
-                    carer_present=(idx == 0),
-                )
-            )
-        current += timedelta(days=1)
+    records = build_activity_logs_from_elr(
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    activities = [ActivityLogDTO(**record) for record in records]
 
     return ActivitiesResponse(activities=activities)
 
@@ -152,25 +131,12 @@ async def get_mood_metrics(user_id: str, start_date: date, end_date: date) -> Mo
     if end_date < start_date:
         return MoodResponse(mood_entries=[])
 
-    entries: List[MoodEntryDTO] = []
-    current = start_date
-    while current <= end_date:
-        for hour, label in ((9, "morning"), (18, "evening")):
-            ts = datetime.combine(current, datetime.min.time()).replace(hour=hour)
-            entries.append(
-                MoodEntryDTO(
-                    id=str(uuid4()),
-                    user_id=user_id,
-                    timestamp=ts,
-                    mood_level=random.choice(list(MoodLevel)),
-                    energy_level=random.randint(3, 8),
-                    anxiety_level=random.randint(2, 6),
-                    pain_level=random.randint(1, 4),
-                    sleep_quality=random.randint(5, 9),
-                    notes=f"Generated demo mood entry ({label})",
-                )
-            )
-        current += timedelta(days=1)
+    records = build_mood_entries_from_elr(
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    entries = [MoodEntryDTO(**record) for record in records]
 
     return MoodResponse(mood_entries=entries)
 
@@ -185,36 +151,23 @@ async def get_engagement_metrics(user_id: str, start_date: date, end_date: date)
     if end_date < start_date:
         return EngagementResponse(metrics=[])
 
-    metrics: List[EngagementMetricDTO] = []
-    current = start_date
-    while current <= end_date:
-        total_activities = random.randint(2, 6)
-        total_duration = random.randint(60, 240)
-        social_interactions = random.randint(0, 4)
-        family_minutes = random.randint(0, max(30, total_duration // 2))
-        cognitive = random.randint(0, total_activities)
-        physical = random.randint(0, max(0, total_activities - cognitive))
-        mood_count = random.randint(1, 3)
-        avg_engagement = round(random.uniform(0.6, 0.95), 3)
-        avg_mood_score = round(random.uniform(0.5, 0.9), 3)
-
-        metrics.append(
-            EngagementMetricDTO(
-                id=str(uuid4()),
-                user_id=user_id,
-                date=current,
-                total_activities=total_activities,
-                total_duration_minutes=total_duration,
-                avg_engagement_score=avg_engagement,
-                social_interactions=social_interactions,
-                family_engagement_minutes=family_minutes,
-                cognitive_activities=cognitive,
-                physical_activities=physical,
-                mood_entries=mood_count,
-                avg_mood_score=avg_mood_score,
-            )
-        )
-
-        current += timedelta(days=1)
+    activity_records = build_activity_logs_from_elr(
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    mood_records = build_mood_entries_from_elr(
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    records = build_engagement_metrics_from_elr(
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+        activity_records=activity_records,
+        mood_records=mood_records,
+    )
+    metrics = [EngagementMetricDTO(**record) for record in records]
 
     return EngagementResponse(metrics=metrics)
