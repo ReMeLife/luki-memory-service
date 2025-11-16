@@ -11,6 +11,7 @@ from datetime import datetime
 
 from .main import app
 from .endpoints import auth, ingestion, search, users
+from .endpoints import metrics
 from .endpoints.ingestion import set_pipeline as set_ingestion_pipeline
 from .endpoints.search import set_pipeline as set_search_pipeline
 from .config import get_settings
@@ -28,6 +29,7 @@ app.include_router(auth.router)
 app.include_router(ingestion.router)
 app.include_router(search.router)
 app.include_router(users.router)
+app.include_router(metrics.router)
 
 @app.on_event("startup")
 async def startup_event():
