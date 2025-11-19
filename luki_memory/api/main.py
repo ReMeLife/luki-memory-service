@@ -26,7 +26,7 @@ from .models import (
     UserMemoryStats, HealthResponse
 )
 from .config import get_settings
-from .endpoints import ingestion, search, delete
+from .endpoints import ingestion, search, delete, metrics
 try:
     from .endpoints.supabase import router as supabase_router
 except ImportError:
@@ -433,6 +433,7 @@ async def health_check():
 app.include_router(ingestion.router)
 app.include_router(search.router)
 app.include_router(delete.router)
+app.include_router(metrics.router)
 
 # Include auth router
 if auth_router:
