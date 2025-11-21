@@ -88,6 +88,7 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 from ..config import get_settings
+from ..policy_client import enforce_policy_scopes
 from ...schemas.elr import ELRContentType, SensitivityLevel
 from ...storage.vector_store import create_embedding_store
 
@@ -249,6 +250,25 @@ async def search_memories(
     start_time = time.time()
     
     try:
+        policy_result = await enforce_policy_scopes(
+            user_id=request.user_id,
+            requested_scopes=["elr_memories"],
+            requester_role="memory_service",
+            context={"operation": "search_memories"},
+        )
+        if not policy_result.get("allowed", False):
+            query_time = time.time() - start_time
+            logger.info(
+                "Memory search blocked by consent policy for user %s",
+                request.user_id,
+            )
+            return MemorySearchResponse(
+                results=[],
+                total_count=0,
+                query_time_ms=query_time * 1000.0,
+                user_id=request.user_id,
+            )
+        
         # Perform semantic search
         search_results = elr_store.search_user_memories(
             user_id=request.user_id,
