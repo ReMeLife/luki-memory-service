@@ -17,6 +17,7 @@ from ..models import (
 )
 # Auth imports removed - not used in current implementation
 from ..config import get_settings
+from ..policy_client import enforce_policy_scopes
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
@@ -54,6 +55,30 @@ async def ingest_elr(
     start_time = time.time()
     
     try:
+        policy_result = await enforce_policy_scopes(
+            user_id=request.user_id,
+            requested_scopes=["elr_memories"],
+            requester_role="memory_service",
+            context={"operation": "ingest_elr"},
+        )
+        if not policy_result.get("allowed", False):
+            processing_time = time.time() - start_time
+            error_msg = "ELR ingestion blocked by consent policy"
+            logger.warning(
+                "%s for user %s",
+                error_msg,
+                request.user_id,
+            )
+            return ELRIngestionResponse(
+                success=False,
+                message=error_msg,
+                chunks_created=0,
+                chunk_ids=[],
+                processing_time_seconds=processing_time,
+                errors=[error_msg],
+                created_item_ids=[],
+            )
+        
         # Authorization check removed - using simplified auth model
         
         # Process ELR data through pipeline (ELR store)
@@ -184,6 +209,32 @@ async def ingest_elr_batch(
         for i, elr_request in enumerate(request.batch_data):
             try:
                 item_start_time = time.time()
+                
+                policy_result = await enforce_policy_scopes(
+                    user_id=elr_request.user_id,
+                    requested_scopes=["elr_memories"],
+                    requester_role="memory_service",
+                    context={"operation": "ingest_elr_batch"},
+                )
+                if not policy_result.get("allowed", False):
+                    failed_requests += 1
+                    item_processing_time = time.time() - item_start_time
+                    error_msg = "ELR ingestion blocked by consent policy"
+                    logger.warning(
+                        "%s for user %s",
+                        error_msg,
+                        elr_request.user_id,
+                    )
+                    individual_results.append(ELRIngestionResponse(
+                        success=False,
+                        message=error_msg,
+                        chunks_created=0,
+                        chunk_ids=[],
+                        processing_time_seconds=item_processing_time,
+                        errors=[error_msg],
+                        created_item_ids=[],
+                    ))
+                    continue
                 
                 result = pipeline.process_elr_to_embeddings(
                     elr_data=elr_request.elr_data,
