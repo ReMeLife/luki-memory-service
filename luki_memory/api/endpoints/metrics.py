@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 
+from ..policy_client import enforce_policy_scopes
 from ...metrics.elr_metrics import (
     build_activity_logs_from_elr,
     build_mood_entries_from_elr,
@@ -214,6 +215,18 @@ async def get_activity_metrics(
     if end_date < start_date:
         return ActivitiesResponse(activities=[])
 
+    policy_result = await enforce_policy_scopes(
+        user_id=user_id,
+        requested_scopes=["analytics"],
+        requester_role="memory_service",
+        context={"operation": "get_activity_metrics"},
+    )
+    if not policy_result.get("allowed", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient consent to access analytics for this user",
+        )
+
     try:
         records = build_activity_logs_from_elr(
             user_id=user_id,
@@ -250,6 +263,18 @@ async def get_mood_metrics(
     if end_date < start_date:
         return MoodResponse(mood_entries=[])
 
+    policy_result = await enforce_policy_scopes(
+        user_id=user_id,
+        requested_scopes=["analytics"],
+        requester_role="memory_service",
+        context={"operation": "get_mood_metrics"},
+    )
+    if not policy_result.get("allowed", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient consent to access analytics for this user",
+        )
+
     try:
         records = build_mood_entries_from_elr(
             user_id=user_id,
@@ -285,6 +310,18 @@ async def get_engagement_metrics(
 
     if end_date < start_date:
         return EngagementResponse(metrics=[])
+
+    policy_result = await enforce_policy_scopes(
+        user_id=user_id,
+        requested_scopes=["analytics"],
+        requester_role="memory_service",
+        context={"operation": "get_engagement_metrics"},
+    )
+    if not policy_result.get("allowed", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient consent to access analytics for this user",
+        )
 
     try:
         activity_records = build_activity_logs_from_elr(
