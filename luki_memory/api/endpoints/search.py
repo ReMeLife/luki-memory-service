@@ -181,9 +181,14 @@ async def search_memories_test(
                 except (ValueError, AttributeError):
                     pass  # Skip date filtering if date parsing fails
             
+            # Prefer the vector-store similarity field when present
+            similarity_value = result.get('similarity_score')
+            if similarity_value is None:
+                similarity_value = result.get('similarity', 0.0)
+
             formatted_results.append(MemorySearchResult(
                 content=result.get('content', ''),
-                similarity_score=result.get('similarity_score', 0.0),
+                similarity_score=similarity_value,
                 metadata=result.get('metadata', {}),
                 chunk_id=result.get('id', ''),
                 created_at=datetime.fromisoformat(result_created_at.replace('Z', '+00:00')) if result_created_at else datetime.utcnow()
@@ -540,9 +545,13 @@ async def find_similar_memories(
         # Format results
         formatted_results = []
         for result in filtered_results:
+            similarity_value = result.get('similarity_score')
+            if similarity_value is None:
+                similarity_value = result.get('similarity', 0.0)
+
             formatted_results.append(MemorySearchResult(
                 content=result.get('content', ''),
-                similarity_score=result.get('similarity_score', 0.0),
+                similarity_score=similarity_value,
                 metadata=result.get('metadata', {}),
                 chunk_id=result.get('id', ''),
                 created_at=datetime.utcnow()  # Default timestamp
