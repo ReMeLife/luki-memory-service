@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException, status
 from typing import Dict, Any
 import logging
 
+from ..policy_client import enforce_policy_scopes
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/delete", tags=["delete"])
@@ -52,6 +54,18 @@ async def delete_memory(
     # Security: Ensure user can only delete their own memories
     # For service-to-service calls, we might not have current_user
     # In that case, trust the memory_id prefix as authorization
+    
+    policy_result = await enforce_policy_scopes(
+        user_id=memory_user_id,
+        requested_scopes=["elr_memories"],
+        requester_role="memory_service",
+        context={"operation": "delete_memory"},
+    )
+    if not policy_result.get("allowed", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient consent to delete this memory",
+        )
     
     try:
         # Delete from ChromaDB
@@ -100,6 +114,18 @@ async def delete_all_user_memories(
     
     # Security: User can only delete their own memories
     # For admin/service calls, you might want different authorization
+    
+    policy_result = await enforce_policy_scopes(
+        user_id=user_id,
+        requested_scopes=["elr_memories"],
+        requester_role="memory_service",
+        context={"operation": "delete_all_user_memories"},
+    )
+    if not policy_result.get("allowed", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient consent to delete memories for this user",
+        )
     
     try:
         deleted_count = elr_store.delete_user_memories(user_id)
