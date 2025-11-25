@@ -49,8 +49,6 @@ WORKDIR /app
 
 # Copy application code
 COPY . .
-# Force restart trigger file
-COPY FORCE_RESTART.txt /app/FORCE_RESTART.txt
 
 # Note: Context documents should be in the memory service directory if needed
 # Railway cannot access parent directories outside build context

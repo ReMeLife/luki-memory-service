@@ -8,10 +8,10 @@ chromadb==0.4.18
 
 # ML libraries - Compatible versions
 sentence-transformers==2.2.2
-huggingface_hub==0.19.4
-numpy==1.24.3
-transformers==4.35.2
-tokenizers==0.15.0
+huggingface_hub>=0.30.0,<1.0.0
+numpy>=1.24.3
+transformers==4.53.0
+tokenizers>=0.21.0,<0.22.0
 
 # NLP processing - Core dependencies
 spacy==3.7.2
@@ -24,7 +24,7 @@ httpx==0.25.2
 python-dotenv==1.0.0
 
 # Data processing
-python-multipart==0.0.6
+python-multipart==0.0.18
 python-dateutil==2.8.2
 
 # Database
@@ -33,7 +33,7 @@ psycopg2-binary==2.9.9
 
 # Authentication - simplified for development
 passlib[bcrypt]==1.7.4
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.4.0
 
 # Supabase integration
 supabase==2.3.4
