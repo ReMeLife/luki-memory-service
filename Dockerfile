@@ -25,7 +25,8 @@ COPY requirements-railway.txt ./requirements.txt
 # Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --prefer-binary --no-cache-dir -r requirements.txt
+    pip install --prefer-binary --no-cache-dir -r requirements.txt && \
+    python -m nltk.downloader -d /opt/venv/nltk_data wordnet vader_lexicon
 
 # Production stage
 FROM python:3.11-slim
