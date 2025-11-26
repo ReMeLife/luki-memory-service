@@ -15,7 +15,7 @@ tokenizers>=0.21.0,<0.22.0
 
 # NLP processing - Core dependencies
 spacy==3.7.2
-nltk==3.8.1
+nltk==3.9.1
 
 # HTTP client
 httpx==0.25.2
