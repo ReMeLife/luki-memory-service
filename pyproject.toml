@@ -34,11 +34,13 @@ dependencies = [
     
     # Vector database and embeddings
     "chromadb>=0.4.15",
-    "sentence-transformers>=2.2.2",
+    "sentence-transformers>=2.7.0",
+    "huggingface-hub>=0.30.0,<0.36.0",
     
     # NLP and text processing
     "spacy>=3.7.0",
-    "transformers>=4.35.0",
+    "nltk>=3.8.1",
+    "transformers>=4.53.0",
     
     # Database and storage
     "sqlalchemy>=2.0.0",
@@ -52,10 +54,10 @@ dependencies = [
     "aiohttp>=3.9.0",
     
     # Security and authentication
-    "cryptography>=41.0.0",
-    "python-jose[cryptography]>=3.3.0",
+    "cryptography>=44.0.1",
+    "python-jose[cryptography]>=3.4.0",
     "passlib[bcrypt]>=1.7.4",
-    "python-multipart>=0.0.6",
+    "python-multipart>=0.0.18",
     
     # Configuration and environment
     "python-dotenv>=1.0.0",
@@ -72,7 +74,7 @@ dependencies = [
     
     # Data processing
     "pandas>=2.1.0",
-    "numpy>=1.24.0",
+    "numpy>=1.24.3",
     
     # Testing (dev dependencies)
     "pytest>=7.4.0",
