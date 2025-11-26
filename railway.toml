@@ -13,7 +13,6 @@ watchPatterns = [
   "luki_memory/integrations/supabase_integration.py",
   "luki_memory/api/endpoints/supabase.py",
   "luki_memory/storage/knowledge_store.py",
-  "FORCE_RESTART.txt"
 ]
 
 [deploy]
