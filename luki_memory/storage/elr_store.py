@@ -6,15 +6,83 @@ independent from project knowledge to ensure data isolation and privacy.
 """
 
 import logging
+import os
+import base64
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import hashlib
 import json
 
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
 from .vector_store import create_embedding_store
 # Settings will be passed as parameters instead of importing
 
 logger = logging.getLogger(__name__)
+
+
+_ENCRYPTION_KEY: Optional[bytes] = None
+
+
+def _get_encryption_key() -> bytes:
+    global _ENCRYPTION_KEY
+    if _ENCRYPTION_KEY is not None:
+        return _ENCRYPTION_KEY
+    key_str = os.getenv("ENCRYPTION_KEY")
+    if not key_str:
+        _ENCRYPTION_KEY = AESGCM.generate_key(bit_length=256)
+        logger.warning("ENCRYPTION_KEY not set; using ephemeral in-memory encryption key")
+        return _ENCRYPTION_KEY
+    key_bytes: Optional[bytes] = None
+    try:
+        candidate = bytes.fromhex(key_str)
+        if len(candidate) == 32:
+            key_bytes = candidate
+    except ValueError:
+        key_bytes = None
+    if key_bytes is None:
+        try:
+            candidate = base64.b64decode(key_str)
+            if len(candidate) == 32:
+                key_bytes = candidate
+        except Exception:
+            key_bytes = None
+    if key_bytes is None:
+        key_bytes = hashlib.sha256(key_str.encode("utf-8")).digest()
+        logger.info("Derived encryption key from ENCRYPTION_KEY value using SHA-256")
+    _ENCRYPTION_KEY = key_bytes
+    return _ENCRYPTION_KEY
+
+
+def _encrypt_text(plaintext: str) -> str:
+    if not plaintext:
+        return plaintext
+    key = _get_encryption_key()
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    ciphertext = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
+    return base64.b64encode(nonce + ciphertext).decode("ascii")
+
+
+def _decrypt_text(value: str) -> str:
+    if not value:
+        return value
+    key = _get_encryption_key()
+    try:
+        raw = base64.b64decode(value.encode("ascii"))
+        if len(raw) <= 12:
+            return value
+        nonce = raw[:12]
+        ciphertext = raw[12:]
+        aesgcm = AESGCM(key)
+        plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+        return plaintext.decode("utf-8")
+    except Exception as e:
+        logger.warning(
+            "Failed to decrypt ELR memory content; returning stored value",
+            extra={"error": str(e)},
+        )
+        return value
 
 
 class ELRStore:
@@ -83,10 +151,11 @@ class ELRStore:
         
         # Generate embedding and store directly
         embedding = self.store.generate_embedding(content)
+        encrypted_content = _encrypt_text(content)
         self.store.collection.add(
             ids=[chunk_id],
             embeddings=[embedding.tolist()],
-            documents=[content],
+            documents=[encrypted_content],
             metadatas=[metadata]
         )
         
@@ -119,37 +188,49 @@ class ELRStore:
         Returns:
             List of matching memory chunks
         """
-        # Special case: if query is just whitespace, get all user memories
+        # Special case: if query is empty or just whitespace, do a fast
+        # direct retrieval of this user's memories without semantic search.
         if not query or query.strip() == "":
-            # Get all documents for this user directly from ChromaDB
             try:
-                # Use large limit to get ALL memories for listing
-                actual_limit = max(k, 1000)  # Ensure we get all memories, not just k
+                # Respect the requested limit k and avoid fetching embeddings,
+                # since listing memories only needs content + metadata.
+                actual_limit = max(1, k or 10)
                 results = self.store.collection.get(
                     where={"user_id": user_id},
                     limit=actual_limit,
-                    include=["documents", "metadatas", "embeddings"]
+                    include=["documents", "metadatas"],
                 )
-                
-                user_results = []
+
+                user_results: List[Dict[str, Any]] = []
                 if results and results.get("ids"):
                     docs = results.get("documents") or []
                     metas = results.get("metadatas") or []
-                    logger.info(f"Direct retrieval found {len(results['ids'])} memories for user {user_id}")
+                    logger.info(
+                        "Direct retrieval found %d memories for user %s (limit=%d)",
+                        len(results["ids"]),
+                        user_id,
+                        actual_limit,
+                    )
                     for i, chunk_id in enumerate(results["ids"]):
-                        user_results.append({
-                            "id": chunk_id,
-                            "content": docs[i] if i < len(docs) else "",
-                            "metadata": metas[i] if i < len(metas) else {},
-                            "similarity_score": 1.0,  # Max score for direct retrieval
-                            "distance": 0.0
-                        })
+                        content_value = docs[i] if i < len(docs) else ""
+                        content_value = _decrypt_text(content_value)
+                        user_results.append(
+                            {
+                                "id": chunk_id,
+                                "content": content_value,
+                                "metadata": metas[i] if i < len(metas) else {},
+                                # For listing, treat all direct results as max similarity
+                                # so downstream consumers can rely on this field.
+                                "similarity_score": 1.0,
+                                "distance": 0.0,
+                            }
+                        )
                 else:
-                    logger.warning(f"No memories found in ChromaDB for user {user_id}")
+                    logger.info("No memories found in ChromaDB for user %s", user_id)
                 return user_results
             except Exception as e:
                 logger.warning(f"Direct retrieval failed for user {user_id}: {e}")
-                # Fall back to regular search
+                # Fall back to regular semantic search if direct get fails
         
         # Perform semantic search with user isolation
         all_results = self.store.search_similar(
@@ -175,6 +256,8 @@ class ELRStore:
             if sensitivity_filter and metadata.get("sensitivity_level") not in sensitivity_filter:
                 continue
             
+            content_value = result.get("content", "")
+            result["content"] = _decrypt_text(content_value)
             user_results.append(result)
             if len(user_results) >= k:
                 break
