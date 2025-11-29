@@ -7,12 +7,13 @@ pydantic-settings==2.1.0
 
 # Vector database (simplified)
 chromadb==0.4.15
-sentence-transformers==2.2.2
-huggingface_hub>=0.30.0,<1.0.0
+sentence-transformers==2.7.0
+huggingface_hub>=0.30.0,<0.36.0
 
 # Basic NLP (without heavy torch dependencies)
 spacy==3.7.2
 numpy==1.24.3
+nltk==3.9.1
 
 # Database
 sqlalchemy==2.0.23
