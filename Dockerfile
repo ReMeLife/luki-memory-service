@@ -50,7 +50,6 @@ WORKDIR /app
 
 # Copy application code
 COPY . .
-
 # Note: Context documents should be in the memory service directory if needed
 # Railway cannot access parent directories outside build context
 
