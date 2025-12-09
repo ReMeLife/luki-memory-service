@@ -407,6 +407,62 @@ class ELRStore:
         
         return self.user_stats[user_id]
     
+    async def update_memory_metadata(
+        self, 
+        memory_id: str, 
+        user_id: str, 
+        metadata: Dict[str, Any]
+    ) -> bool:
+        """
+        Update metadata for an existing memory.
+        
+        Args:
+            memory_id: The memory ID to update
+            user_id: User ID for verification
+            metadata: New metadata to set (replaces existing)
+            
+        Returns:
+            True if successful, False if memory not found
+        """
+        try:
+            # Get existing memory to verify ownership
+            result = self.store.collection.get(
+                ids=[memory_id],
+                include=["metadatas", "documents"]
+            )
+            
+            if not result["ids"]:
+                logger.warning(f"Memory {memory_id} not found for update")
+                return False
+            
+            existing_metadata = result["metadatas"][0] if result["metadatas"] else {}
+            
+            # Verify user ownership
+            if existing_metadata.get("user_id") != user_id:
+                logger.warning(f"User {user_id} does not own memory {memory_id}")
+                return False
+            
+            # Merge new metadata with existing, preserving user_id and other system fields
+            updated_metadata = {
+                **existing_metadata,
+                **metadata,
+                "user_id": user_id,  # Ensure user_id is preserved
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            
+            # Update in ChromaDB
+            self.store.collection.update(
+                ids=[memory_id],
+                metadatas=[updated_metadata]
+            )
+            
+            logger.info(f"Updated metadata for memory {memory_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating memory metadata: {e}")
+            return False
+    
     def export_user_data(self, user_id: str) -> Dict[str, Any]:
         """
         Export all user data for portability (GDPR compliance).
