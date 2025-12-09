@@ -431,6 +431,7 @@ async def health_check():
 
 # Include routers
 app.include_router(ingestion.router)
+app.include_router(ingestion.memories_router)  # Memory update endpoints
 app.include_router(search.router)
 app.include_router(delete.router)
 app.include_router(metrics.router)
