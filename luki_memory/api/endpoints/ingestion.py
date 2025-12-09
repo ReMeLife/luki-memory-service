@@ -320,3 +320,63 @@ async def ingestion_status():
         "supported_sensitivity_levels": ["PERSONAL", "SENSITIVE", "CONFIDENTIAL"],
         "supported_consent_levels": ["PUBLIC", "PRIVATE", "RESTRICTED"]
     }
+
+
+# Memory update endpoint - separate router for /memories path
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+
+class UpdateMemoryMetadataRequest(BaseModel):
+    user_id: str
+    metadata: Dict[str, Any]
+
+# Create a separate router for memory updates
+memories_router = APIRouter(prefix="/memories", tags=["memories"])
+
+@memories_router.patch("/{memory_id}")
+async def update_memory_metadata(
+    memory_id: str,
+    request: UpdateMemoryMetadataRequest
+):
+    """
+    Update metadata for an existing memory.
+    
+    Used primarily for adding generated images to Life Story memories.
+    """
+    if pipeline is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Memory service not initialized"
+        )
+    
+    try:
+        # Get the ELR store from pipeline
+        elr_store = pipeline.elr_store
+        
+        # Update the memory metadata in ChromaDB
+        result = await elr_store.update_memory_metadata(
+            memory_id=memory_id,
+            user_id=request.user_id,
+            metadata=request.metadata
+        )
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Memory {memory_id} not found"
+            )
+        
+        return {
+            "success": True,
+            "memory_id": memory_id,
+            "message": "Metadata updated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating memory metadata: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update memory: {str(e)}"
+        )
